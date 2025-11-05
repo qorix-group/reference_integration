@@ -29,11 +29,11 @@ git_override(
 )
 
 ## --- orchestration ---
-bazel_dep(name = "inc_orchestrator", version = "0.0.0")
+bazel_dep(name = "score_orchestrator", version = "0.0.2")
 git_override(
-    module_name = "inc_orchestrator",
-    remote = "https://github.com/eclipse-score/inc_orchestrator.git",
-    commit = "9f8ed482bdf786117eb3c4c1be14a1ee58a120ab",
+    module_name = "score_orchestrator",
+    remote = "https://github.com/eclipse-score/orchestrator.git",
+    commit = "ef7b2f2b339134daf281d3913d3a172cd252bf94",
 )
 
 ## --- communication ---
