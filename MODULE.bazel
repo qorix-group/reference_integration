@@ -68,13 +68,36 @@ use_repo(llvm, "llvm_toolchain_llvm")
 
 register_toolchains("@llvm_toolchain//:all")
 
-## needed additions to build
+# needed additions to build, should be removed when persistency is updated with score_test_scenarios
 bazel_dep(name = "testing-utils")
 git_override(
     module_name = "testing-utils",
     commit = "a847c7464cfa47e000141631d1223b92560d2e58",  # tag v0.2.0
     remote = "https://github.com/qorix-group/testing_tools.git",
 )
+
+bazel_dep(name = "score_test_scenarios", version = "0.3.0")
+git_override(
+    module_name = "score_test_scenarios",
+    commit = "a2f9cded3deb636f5dc800bf7a47131487119721",  # tag v0.3.0
+    remote = "https://github.com/eclipse-score/testing_tools.git",
+)
+
+# Needed for feature integration tests
+bazel_dep(name = "rules_rust", version = "0.61.0")
+bazel_dep(name = "score_itf", version = "0.1.0")
+
+crate = use_extension("@rules_rust//crate_universe:extensions.bzl", "crate")
+crate.from_cargo(
+    name = "feature_integration_tests_crates",
+    #cargo_lockfile = "//feature_integration_tests/rust_test_scenarios:Cargo.lock",
+    #cargo_lockfile = "//:Cargo.lock",
+    manifests = [
+        "//:Cargo.toml",
+        "//feature_integration_tests/rust_test_scenarios:Cargo.toml",
+    ],
+)
+use_repo(crate, "feature_integration_tests_crates")
 
 # # TODO: What is this for?
 archive_override(

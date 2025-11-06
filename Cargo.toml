@@ -1,0 +1,13 @@
+[workspace]
+resolver = "2"
+# Split to default members without component integration tests.
+# Used when executing cargo from project root.
+members = [
+    "feature_integration_tests/rust_test_scenarios",
+]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2021"
+license-file = "LICENSE"
+authors = ["S-CORE Contributors"]
