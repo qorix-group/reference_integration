@@ -207,6 +207,7 @@ io-sock                                  # Network socket manager
 mods-pci.so                              # PCI module support for network hardware
 mods-phy.so                              # Physical layer module for network interfaces
 mods-usb.so                              # USB module support
+mods-kso.so = ${MAIN_BUILD_FILE_DIR}/../libs/mods-kso.so  # Custom io-sock module for experiment
 libfdt.so.1                              # Flattened Device Tree library
 libusbdci.so.2                           # USB device controller interface library
 devs-vtnet_pci.so                        # VirtIO network device driver for QEMU/KVM
