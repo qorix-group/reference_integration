@@ -45,3 +45,26 @@ build:autosd-x86_64 --platforms=@score_bazel_platforms//:x86_64-linux
 build:autosd-x86_64 --force_pic
 build:autosd-x86_64 --extra_toolchains=@autosd_10_gcc_repo//:gcc_toolchain_linux_x86_64
 build:autosd-x86_64 --extra_toolchains=@rules_rpm//toolchains:linux_x86_64
+
+
+
+# -------------------------------------------------------------------------------
+# Ferrocene Rust coverage config
+# -------------------------------------------------------------------------------
+build:ferrocene-coverage --@rules_rust//rust/settings:extra_rustc_flag=-Cinstrument-coverage
+build:ferrocene-coverage --@rules_rust//rust/settings:extra_rustc_flag=-Clink-dead-code
+build:ferrocene-coverage --@rules_rust//rust/settings:extra_rustc_flag=-Ccodegen-units=1
+build:ferrocene-coverage --@rules_rust//rust/settings:extra_rustc_flag=-Cdebuginfo=2
+build:ferrocene-coverage --@rules_rust//rust/settings:extra_exec_rustc_flag=-Cinstrument-coverage
+build:ferrocene-coverage --@rules_rust//rust/settings:extra_exec_rustc_flag=-Clink-dead-code
+build:ferrocene-coverage --@rules_rust//rust/settings:extra_exec_rustc_flag=-Ccodegen-units=1
+build:ferrocene-coverage --@rules_rust//rust/settings:extra_exec_rustc_flag=-Cdebuginfo=2
+test:ferrocene-coverage --run_under=@score_tooling//coverage:llvm_profile_wrapper
+
+common:ferrocene-coverage --config=linux-x86_64
+
+
+# # Coverage configuration for C++
+# coverage --features=coverage
+# coverage --combined_report=lcov
+# coverage --cache_test_results=no

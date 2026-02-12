@@ -11,6 +11,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
 load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
+load("@score_tooling//:defs.bzl", "rust_coverage_report", )
 
 alias(
     name = "image",
@@ -28,3 +29,25 @@ sh_binary(
         ":image",
     ],
 )
+
+rust_coverage_report(
+    name = "per_rust_coverage",
+    bazel_configs = [
+        "ferrocene-coverage",
+    ],
+    query = 'kind("rust_test", @score_persistency//src/rust/...)',
+    visibility = ["//visibility:public"],
+)
+
+# alias(
+#     name = "rust_coverage",
+#     actual = ":run",
+#     visibility = ["//visibility:public"],
+# )
+
+# test_suite(
+#     name = "ut_int",
+#     tests = [
+#         "@score_persistency//src/rust/rust_kvs:tests",
+#     ],
+# )
