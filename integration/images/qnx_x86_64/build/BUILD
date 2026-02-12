@@ -50,6 +50,7 @@ qnx_ifs(
         ":system_dir",
         ":scripts",
         ":configs",
+        ":libs",
         "//showcases:showcases_all",
         "//feature_integration_tests/configs:etc_configs",
         "@score_persistency//tests/test_scenarios/cpp:test_scenarios",        
@@ -70,3 +71,9 @@ filegroup(
     ],
 )
 
+filegroup(
+    name = "libs",
+    srcs = [
+        "//images/qnx_x86_64/libs:mods-kso.so",
+    ],
+)

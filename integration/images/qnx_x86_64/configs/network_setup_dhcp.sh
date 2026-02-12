@@ -20,7 +20,7 @@
 # *******************************************************************************
 
 echo "---> Starting Networking with simple DHCP"
-io-sock -m phy -m pci -d vtnet_pci    # Start network stack with PHY and PCI modules, load VirtIO network driver
+io-sock -m phy -m pci -m kso -d vtnet_pci    # Start network stack with PHY and PCI modules, load VirtIO network driver
 waitfor /dev/socket                    # Wait for socket device to become available before proceeding
 
 echo "---> Bringing up network interface"
