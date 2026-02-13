@@ -65,6 +65,10 @@ jobs:
           run: |
             python3 ./scripts/quality_runners.py --unit-tests
 
+        - name: Execute Coverage Analysis
+          run: |
+            python3 ./scripts/quality_runners.py --coverage
+
         - name: Publish build summary
           if: always()
           run: |
@@ -72,6 +76,12 @@ jobs:
               cat docs/verification/unit_test_summary.md >> "$GITHUB_STEP_SUMMARY"
             else
               echo "No build summary file found (docs/verification/unit_test_summary.md)" >> "$GITHUB_STEP_SUMMARY"
+            fi
+            echo "" >> "$GITHUB_STEP_SUMMARY" # Add a newline for better formatting
+            if [ -f docs/verification/coverage_summary.md ]; then
+              cat docs/verification/coverage_summary.md >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "No coverage summary file found (docs/verification/coverage_summary.md)" >> "$GITHUB_STEP_SUMMARY"
             fi
 
         - name: Upload logs artifact
