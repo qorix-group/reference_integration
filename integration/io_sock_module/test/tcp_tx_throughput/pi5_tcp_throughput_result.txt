@@ -1,0 +1,42 @@
+The each data size is transmitted continuously for 5-sec and then throughput is calcualted for 1msec.
+
+io-sock Transmission Summary:
+=============================
+Size:      100 bytes, Total Transmitted: 180853500 bytes, Duration: 5031 ms, Throughput:  35947 bytes/ms
+Size:      500 bytes, Total Transmitted: 516293500 bytes, Duration: 5035 ms, Throughput: 102540 bytes/ms
+Size:     1024 bytes, Total Transmitted: 472848384 bytes, Duration: 5084 ms, Throughput:  93007 bytes/ms
+Size:     2048 bytes, Total Transmitted: 516323328 bytes, Duration: 5040 ms, Throughput: 102445 bytes/ms
+Size:     5120 bytes, Total Transmitted: 550072320 bytes, Duration: 5050 ms, Throughput: 108925 bytes/ms
+Size:    10240 bytes, Total Transmitted: 557342720 bytes, Duration: 5060 ms, Throughput: 110146 bytes/ms
+Size:    20480 bytes, Total Transmitted: 546877440 bytes, Duration: 5012 ms, Throughput: 109113 bytes/ms
+Size:    51200 bytes, Total Transmitted: 561049600 bytes, Duration: 5018 ms, Throughput: 111807 bytes/ms
+Size:   102400 bytes, Total Transmitted: 551833600 bytes, Duration: 5028 ms, Throughput: 109752 bytes/ms
+Size:   204800 bytes, Total Transmitted: 544972800 bytes, Duration: 5006 ms, Throughput: 108863 bytes/ms
+Size:   512000 bytes, Total Transmitted: 547840000 bytes, Duration: 5028 ms, Throughput: 108957 bytes/ms
+Size:  1048576 bytes, Total Transmitted: 547356672 bytes, Duration: 5024 ms, Throughput: 108948 bytes/ms
+Size:  2097152 bytes, Total Transmitted: 549453824 bytes, Duration: 5041 ms, Throughput: 108996 bytes/ms
+Size:  5242880 bytes, Total Transmitted: 550502400 bytes, Duration: 5034 ms, Throughput: 109356 bytes/ms
+Size: 10485760 bytes, Total Transmitted: 545259520 bytes, Duration: 5012 ms, Throughput: 108790 bytes/ms
+
+Average Throughput: 102497 bytes/ms, for total 7738879608 bytes transmitted in 75503 ms
+
+
+Test Application Transmission Summary:
+======================================
+Size:      100 bytes, Total Transmitted:  57332700 bytes, Duration: 5000 ms, Throughput:  11466 bytes/ms
+Size:      500 bytes, Total Transmitted: 251357000 bytes, Duration: 5000 ms, Throughput:  50271 bytes/ms
+Size:     1024 bytes, Total Transmitted: 248803328 bytes, Duration: 5000 ms, Throughput:  49760 bytes/ms
+Size:     2048 bytes, Total Transmitted: 510269440 bytes, Duration: 5000 ms, Throughput: 102053 bytes/ms
+Size:     5120 bytes, Total Transmitted: 547230720 bytes, Duration: 5000 ms, Throughput: 109446 bytes/ms
+Size:    10240 bytes, Total Transmitted: 560066560 bytes, Duration: 5000 ms, Throughput: 112013 bytes/ms
+Size:    20480 bytes, Total Transmitted: 553512960 bytes, Duration: 5000 ms, Throughput: 110702 bytes/ms
+Size:    51200 bytes, Total Transmitted: 548096000 bytes, Duration: 5000 ms, Throughput: 109619 bytes/ms
+Size:   102400 bytes, Total Transmitted: 544972800 bytes, Duration: 5000 ms, Throughput: 108994 bytes/ms
+Size:   204800 bytes, Total Transmitted: 543334400 bytes, Duration: 5001 ms, Throughput: 108645 bytes/ms
+Size:   512000 bytes, Total Transmitted: 542720000 bytes, Duration: 5003 ms, Throughput: 108478 bytes/ms
+Size:  1048576 bytes, Total Transmitted: 542113792 bytes, Duration: 5007 ms, Throughput: 108271 bytes/ms
+Size:  2097152 bytes, Total Transmitted: 543162368 bytes, Duration: 5015 ms, Throughput: 108307 bytes/ms
+Size:  5242880 bytes, Total Transmitted: 540016640 bytes, Duration: 5020 ms, Throughput: 107573 bytes/ms
+Size: 10485760 bytes, Total Transmitted: 545259520 bytes, Duration: 5029 ms, Throughput: 108423 bytes/ms
+
+Average Throughput: 94282 bytes/ms, for total 7078248228 bytes transmitted in 75075 ms

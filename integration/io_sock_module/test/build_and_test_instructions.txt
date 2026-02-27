@@ -1,0 +1,70 @@
+Custom io-sock module source code and test files are available here
+https://github.com/qorix-group/reference_integration/tree/prabakaran_io_sock_module_experiment
+
+
+Build and Test on QEMU_x86_64
+=============================
+1) Switch to ./integration/io_sock_module/src/
+
+2) Execute build.sh. After successful build, the mods-kso.so will be stored at ./integration/images/qnx_x86_64/libs/
+
+3) Run QEMU_x86_64 image
+	
+	bazel run --config=qnx-x86_64 //images/qnx_x86_64:run
+   
+   The mods-kso.so is loaded automatically, execute and listens on TCP port 12345.
+
+4) Execute ./integration/io_sock_module/test/client.py on host to perform TCP communication with "custom io-sock module (mods-kso.so)" with various data sizes and get result.
+
+	python3 client.py <IP address of the QEMU_x86_64>
+
+5) Build ./integration/io_sock_module/test/tcp_test.rs and download the executable to QEMU_x86_64.
+   Note: Cargo/BUILD files are not updated to build tcp_test.rs in this repo. I used to put in examples folder of kyron and build for desired target (QNX x86_64/aarch64)
+
+6) Execute "tcp_test" on the QEMU_x86_64 target
+
+7) Edit ./integration/io_sock_module/test/client.py line number 96 for SERVER_PORT. It should be SERVER_PORT = 5000.
+
+8) Execute ./integration/io_sock_module/test/client.py to perform TCP communication with "tcp_test" which goes through standard path (libsocket->io-sock) with various data sizes and get result.
+
+
+Build and Test on aarch64 (PIx/etc)
+===================================
+1) Switch to ./integration/io_sock_module/src/
+
+2) Edit ./integration/io_sock_module/src/common.mk line number 13 for the CPU to be aarch64
+	override CPU=aarch64
+
+3) Execute build.sh. After successful build, the mods-kso.so will be stored at ./integration/images/qnx_x86_64/libs/
+   If you get compilation error like "cc: unknown target 'gcc_ntoaarch64'", then edit ~/qnx800/target/qnx/usr/include/mk/qconf-linux.mk (line numbers 209 to 213) as shown below to add "le" to "gcc_ntoaarch64"
+   
+CC_nto_aarch64_gcc_qcc = $(QNX_HOST)/usr/bin/qcc -V$(gcc_ver_string)gcc_ntoaarch64le -c
+AS_nto_aarch64_gcc_qcc = $(QNX_HOST)/usr/bin/qcc -V$(gcc_ver_string)gcc_ntoaarch64le -c
+LR_nto_aarch64_gcc_qcc = $(QNX_HOST)/usr/bin/qcc -V$(gcc_ver_string)gcc_ntoaarch64le -r -Bstatic
+LD_nto_aarch64_gcc_qcc = $(QNX_HOST)/usr/bin/qcc -V$(gcc_ver_string)gcc_ntoaarch64le
+AR_nto_aarch64_gcc_qcc = $(QNX_HOST)/usr/bin/qcc -V$(gcc_ver_string)gcc_ntoaarch64le -a
+   
+4) Download ./integration/images/qnx_x86_64/libs/mods-kso.so to aarch64 target (PI4/etc), any folder
+
+5) Execute below command to load mods-kso.so
+	mount -T io-sock </downloaded path/mods-kso.so>
+
+6) Edit ./integration/io_sock_module/test/client.py line number 96 for SERVER_PORT. It should be SERVER_PORT = 12345.
+
+7) Execute ./integration/io_sock_module/test/client.py on host to perform TCP communication with "custom io-sock module (mods-kso.so)" with various data sizes and get result.
+
+	python3 client.py <IP address of the aarch64 target>
+
+8) Build ./integration/io_sock_module/test/tcp_test.rs and download the executable to aarch64 target.
+   Note: Cargo/BUILD files are not updated to build tcp_test.rs in this repo. I used to put in examples folder of kyron and build for desired target (QNX x86_64/aarch64)
+
+9) Execute "tcp_test" on the aarch64 target
+
+10) Edit ./integration/io_sock_module/test/client.py line number 96 for SERVER_PORT. It should be SERVER_PORT = 5000.
+
+11) Execute ./integration/io_sock_module/test/client.py to perform TCP communication with "tcp_test" which goes through standard path (libsocket->io-sock) with various data sizes and get result.
+
+
+Note:
+The printf() output from mods-kso.so goes to slogger. It can be viewed with command,
+slog2info | grep -i kso
