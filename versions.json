@@ -2,5 +2,9 @@
   {
     "version": "main",
     "url": "https://qorix-group.github.io/reference_integration/main/"
+  },
+  {
+    "version": "pr-2",
+    "url": "https://qorix-group.github.io/reference_integration/pr-2/"
   }
 ]
