@@ -3,9 +3,9 @@
 ## Overview
 
 This documents how to run CodeQL static analysis on Bazel-built C++ code in this
-repository. A dedicated script handles the entire pipeline: extracting
-compilation commands, building the CodeQL database, running queries, and
-producing an HTML report.
+repository. A dedicated script handles the entire pipeline: generating compile
+commands, building the CodeQL database, running queries, and producing an HTML
+report.
 
 ## Why a custom approach?
 
@@ -20,20 +20,63 @@ CodeQL normally intercepts compiler invocations via `LD_PRELOAD`. This does
 
 The script works around all three issues by:
 
-1. Using `bazel aquery` to extract the exact compilation commands from Bazel's
-   action graph — no actual build needed.
+1. Using [Hedron's compile_commands extractor][hedron] (`bazel run
+   //:refresh_compile_commands`) to generate a standard `compile_commands.json`.
 2. Cleaning the commands (stripping `-MD`, `-MF`, `-frandom-seed`, redirecting
    `-o` to a temp directory).
 3. Invoking the CodeQL C++ **extractor directly** (`--mimic <compiler>`) for
    each command, bypassing the `LD_PRELOAD` tracer entirely.
 
-## Prerequisites
+[hedron]: https://github.com/hedronvision/bazel-compile-commands-extractor
+
+## Setup
+
+### Bazel configuration (already done)
+
+The Hedron dependency is declared in `MODULE.bazel`:
+
+```starlark
+bazel_dep(name = "hedron_compile_commands", dev_dependency = True)
+git_override(
+    module_name = "hedron_compile_commands",
+    commit = "1e08f8e0507b6b6b1f4416a9a22cf5c28beaba93",
+    remote = "https://github.com/hedronvision/bazel-compile-commands-extractor.git",
+)
+```
+
+The target is defined in the root `BUILD` file:
+
+```starlark
+load("@hedron_compile_commands//:refresh_compile_commands.bzl", "refresh_compile_commands")
+
+refresh_compile_commands(
+    name = "refresh_compile_commands",
+    targets = {
+        "@score_lifecycle_health//src/...": "--config=linux-x86_64",
+    },
+)
+```
+
+To scan different targets, edit the `targets` dict in `BUILD`. Multiple targets
+can be listed:
+
+```starlark
+refresh_compile_commands(
+    name = "refresh_compile_commands",
+    targets = {
+        "@score_lifecycle_health//src/...": "--config=linux-x86_64",
+        "@score_baselibs//score/mw/log/...": "--config=linux-x86_64",
+    },
+)
+```
+
+### External prerequisites
 
 | Tool          | Minimum Version | Notes                                       |
 |---------------|-----------------|---------------------------------------------|
 | CodeQL CLI    | 2.15+           | Download the [bundle][codeql-bundle]         |
 | Bazel         | 7.x             | Already configured in the repo               |
-| Python 3      | 3.10+           | Used for aquery parsing                      |
+| Python 3      | 3.10+           | Used for compile command cleaning            |
 | sarif-tools   | 3.x             | Optional, for HTML report (`pip install sarif-tools`) |
 
 [codeql-bundle]: https://github.com/github/codeql-action/releases
@@ -44,7 +87,7 @@ The script works around all three issues by:
 # Set the path to your CodeQL bundle
 export CODEQL_HOME=/path/to/codeql-bundle-linux64/codeql
 
-# Run with defaults (score_lifecycle_health, linux-x86_64)
+# Run the full pipeline
 scripts/workflow/codeql_bazel_scan.sh
 ```
 
@@ -59,29 +102,22 @@ Results are written to `codeql-output/`:
 scripts/workflow/codeql_bazel_scan.sh [options]
 
   --codeql-home <path>    Path to CodeQL bundle directory
-  --bazel-config <name>   Bazel --config value (default: linux-x86_64)
-  --bazel-target <label>  Bazel target pattern (default: @score_lifecycle_health//src/...)
   --output-dir <path>     Where to write results (default: ./codeql-output)
-  --query-suite <suite>   Query suite name without "cpp-" prefix (default: security-and-quality)
+  --query-suite <suite>   Query suite name (default: security-and-quality)
   --help                  Show help
 ```
 
 ### Examples
 
 ```bash
-# Scan a different target with the code-scanning suite
-scripts/workflow/codeql_bazel_scan.sh \
-  --bazel-target "@score_baselibs//score/mw/log/..." \
-  --query-suite "security-extended"
-
 # Use a specific CodeQL bundle and write results elsewhere
 scripts/workflow/codeql_bazel_scan.sh \
   --codeql-home /opt/codeql \
   --output-dir /tmp/codeql-results
 
-# Scan for QNX targets
+# Run the extended security suite
 scripts/workflow/codeql_bazel_scan.sh \
-  --bazel-config qnx-x86_64
+  --query-suite "security-extended"
 ```
 
 ## Available query suites
@@ -105,10 +141,10 @@ codeql database analyze ./codeql-output/codeql-db \
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ 1. bazel aquery --config <cfg> 'mnemonic("CppCompile",...)'│
-│    → extracts compiler flags, includes, source file paths   │
+│ 1. bazel run //:refresh_compile_commands                    │
+│    → Hedron generates compile_commands.json at repo root    │
 ├─────────────────────────────────────────────────────────────┤
-│ 2. Python: clean commands → compile_commands.json           │
+│ 2. Python: clean commands → codeql-output/compile_commands  │
 │    → strips -MD/-MF/-o, redirects outputs to tmpdir         │
 ├─────────────────────────────────────────────────────────────┤
 │ 3. codeql database init (source-root = external repo)       │
@@ -177,8 +213,8 @@ codeql database analyze codeql-output/codeql-db \
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| "No compile commands extracted" | Bazel aquery found no `CppCompile` actions | Check `--bazel-target` is correct and has C++ code |
+| "Hedron did not generate compile_commands.json" | `refresh_compile_commands` target missing or Hedron not configured | Check `MODULE.bazel` has `hedron_compile_commands` dep and `BUILD` has the target |
 | "0 TRAP files generated" | Extractor can't find compiler or headers | Ensure a successful `bazel build` has run at least once to populate the execution root |
-| Extraction fails with "Permission denied" on `.d` files | Using raw Bazel commands instead of the script | The script strips `-MD`/`-MF` flags; don't bypass it |
-| "0 lines of user code" | Source root doesn't match file locations | The script auto-detects source root from the target label; verify with `--bazel-target` |
+| Extraction fails with "Permission denied" on `.d` files | Using raw compile_commands.json without cleaning | The script cleans `-MD`/`-MF` flags automatically; don't bypass it |
+| "0 lines of user code" | Source root doesn't match file locations | The script auto-detects source root from file paths in compile_commands.json |
 | Individual file extraction fails | Source code has syntax errors | Check the build output; e.g. stray characters in source files |

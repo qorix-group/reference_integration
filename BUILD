@@ -11,6 +11,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
 
+load("@hedron_compile_commands//:refresh_compile_commands.bzl", "refresh_compile_commands")
 load("@score_docs_as_code//:docs.bzl", "docs")
 load("@score_tooling//:defs.bzl", "copyright_checker", "setup_starpls", "use_format_targets")
 
@@ -64,6 +65,14 @@ copyright_checker(
 
 # Add target for formatting checks
 use_format_targets()
+
+# Generate compile_commands.json for IDE support and CodeQL analysis
+refresh_compile_commands(
+    name = "refresh_compile_commands",
+    targets = {
+        "@score_lifecycle_health//src/...": "--config=linux-x86_64",
+    },
+)
 
 exports_files([
     "MODULE.bazel",

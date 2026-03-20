@@ -17,20 +17,22 @@
 # Bazel uses a hermetic (statically linked) GCC toolchain, which prevents
 # CodeQL's LD_PRELOAD-based tracer from intercepting compiler invocations.
 # This script works around that by:
-#   1. Extracting compilation commands from Bazel's action graph (aquery)
-#   2. Cleaning them (stripping -MD/-MF/-o flags that target read-only dirs)
+#   1. Using Hedron's compile_commands extractor to generate compile_commands.json
+#   2. Cleaning commands (stripping flags that target read-only Bazel output dirs)
 #   3. Invoking the CodeQL C++ extractor directly for each command
 #   4. Finalizing the database and running the analysis
+#
+# Prerequisites:
+#   - hedron_compile_commands configured in MODULE.bazel
+#   - refresh_compile_commands target defined in BUILD
 #
 # Usage:
 #   ./codeql_bazel_scan.sh [options]
 #
 # Options:
-#   --codeql-home <path>   Path to CodeQL bundle (default: auto-detect)
-#   --bazel-config <name>  Bazel config to use (default: linux-x86_64)
-#   --bazel-target <label> Bazel target pattern (default: @score_lifecycle_health//src/...)
+#   --codeql-home <path>   Path to CodeQL bundle (default: auto-detect via CODEQL_HOME or PATH)
 #   --output-dir <path>    Directory for results (default: ./codeql-output)
-#   --query-suite <suite>  CodeQL query suite (default: cpp-security-and-quality)
+#   --query-suite <suite>  CodeQL query suite (default: security-and-quality)
 #   --help                 Show this help message
 #
 set -euo pipefail
@@ -41,8 +43,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 CODEQL_HOME="${CODEQL_HOME:-}"
-BAZEL_CONFIG="linux-x86_64"
-BAZEL_TARGET="@score_lifecycle_health//src/..."
 OUTPUT_DIR="$REPO_ROOT/codeql-output"
 QUERY_SUITE="security-and-quality"
 
@@ -56,8 +56,6 @@ usage() {
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --codeql-home)  CODEQL_HOME="$2"; shift 2 ;;
-        --bazel-config) BAZEL_CONFIG="$2"; shift 2 ;;
-        --bazel-target) BAZEL_TARGET="$2"; shift 2 ;;
         --output-dir)   OUTPUT_DIR="$2";   shift 2 ;;
         --query-suite)  QUERY_SUITE="$2";  shift 2 ;;
         --help|-h)      usage ;;
@@ -91,38 +89,8 @@ echo "CodeQL version: $("$CODEQL" version --format=terse 2>/dev/null)"
 
 # ─── Resolve Bazel paths ─────────────────────────────────────────────────────
 
-EXEC_ROOT="$(bazel info execution_root 2>/dev/null)"
-echo "Bazel execution root: $EXEC_ROOT"
-
-# Derive the external repo name from the target label (e.g. @score_lifecycle_health -> score_lifecycle_health+)
-REPO_NAME="$(echo "$BAZEL_TARGET" | sed 's|^@||' | sed 's|//.*||')+"
-SOURCE_ROOT="$EXEC_ROOT/external/$REPO_NAME"
-
-if [[ ! -d "$SOURCE_ROOT" ]]; then
-    echo "WARNING: Source root $SOURCE_ROOT does not exist yet."
-    echo "Running a no-op build to materialise external repos..."
-    bazel build --config "$BAZEL_CONFIG" --nobuild "$BAZEL_TARGET" 2>/dev/null || true
-    SOURCE_ROOT="$EXEC_ROOT/external/$REPO_NAME"
-fi
-
-echo "Source root: $SOURCE_ROOT"
-
-# ─── Detect compiler path ────────────────────────────────────────────────────
-
-COMPILER="$(bazel aquery --config "$BAZEL_CONFIG" \
-    "mnemonic(\"CppCompile\", $BAZEL_TARGET)" --output=text 2>/dev/null \
-    | grep -oP '(?<=exec )\S+g\+\+' | head -1 || true)"
-
-if [[ -z "$COMPILER" ]]; then
-    echo "ERROR: Could not detect compiler from Bazel aquery output."
-    exit 1
-fi
-
-# Make absolute
-if [[ "$COMPILER" != /* ]]; then
-    COMPILER="$EXEC_ROOT/$COMPILER"
-fi
-echo "Compiler: $COMPILER"
+OUTPUT_BASE="$(bazel info output_base 2>/dev/null)"
+echo "Bazel output base: $OUTPUT_BASE"
 
 # ─── Output directory setup ──────────────────────────────────────────────────
 
@@ -134,54 +102,54 @@ TMPDIR_OBJ="$(mktemp -d "${TMPDIR:-/tmp}/codeql-bazel-XXXXXX")"
 
 mkdir -p "$OUTPUT_DIR"
 
-# ─── Step 1: Extract compilation commands from Bazel aquery ──────────────────
+# ─── Step 1: Generate compile_commands.json via Hedron ───────────────────────
 
 echo ""
-echo "=== Step 1/4: Extracting compilation commands from Bazel aquery ==="
+echo "=== Step 1/4: Generating compile_commands.json via Hedron ==="
 
-python3 - "$EXEC_ROOT" "$BAZEL_CONFIG" "$BAZEL_TARGET" "$COMPILE_DB" "$TMPDIR_OBJ" <<'PYTHON_SCRIPT'
-import json, re, subprocess, os, sys
+cd "$REPO_ROOT"
+bazel run //:refresh_compile_commands 2>&1 | tail -5
 
-exec_root   = sys.argv[1]
-config      = sys.argv[2]
-target      = sys.argv[3]
-output_file = sys.argv[4]
-tmpdir      = sys.argv[5]
+HEDRON_COMPILE_DB="$REPO_ROOT/compile_commands.json"
+if [[ ! -s "$HEDRON_COMPILE_DB" ]]; then
+    echo "ERROR: Hedron did not generate compile_commands.json at $HEDRON_COMPILE_DB"
+    exit 1
+fi
 
-result = subprocess.run(
-    ["bazel", "aquery", "--config", config,
-     f'mnemonic("CppCompile", {target})', "--output=text"],
-    capture_output=True, text=True
-)
+# Clean the compile commands for CodeQL:
+#   - Strip -MD / -MF <path> (dependency files target read-only Bazel dirs)
+#   - Strip -frandom-seed= (not needed for extraction)
+#   - Redirect -o to temp dir (output objects target read-only Bazel dirs)
+python3 - "$HEDRON_COMPILE_DB" "$COMPILE_DB" "$TMPDIR_OBJ" <<'PYTHON_SCRIPT'
+import json, os, sys
 
-blocks = re.split(r'\naction ', result.stdout)
-compile_commands = []
+input_file  = sys.argv[1]
+output_file = sys.argv[2]
+tmpdir      = sys.argv[3]
 
-for block in blocks:
-    cmd_match = re.search(r'Command Line: \(exec (.*?)\)', block, re.DOTALL)
-    if not cmd_match:
-        continue
-    parts = []
-    for line in cmd_match.group(1).split('\n'):
-        line = line.strip().rstrip(' \\')
-        if line:
-            if line.startswith("'") and line.endswith("'"):
-                line = line[1:-1]
-            parts.append(line)
+with open(input_file) as f:
+    commands = json.load(f)
+
+cleaned = []
+for entry in commands:
+    parts = entry.get("command", "").split()
+    if not parts:
+        # Try "arguments" format instead
+        parts = entry.get("arguments", [])
     if not parts:
         continue
 
     # Find source file
-    source_file = None
-    for p in reversed(parts):
-        if p.endswith(('.cpp', '.cc', '.c', '.cxx')):
-            source_file = p
-            break
+    source_file = entry.get("file", "")
+    if not source_file:
+        for p in reversed(parts):
+            if p.endswith(('.cpp', '.cc', '.c', '.cxx')):
+                source_file = p
+                break
     if not source_file:
         continue
 
-    # Clean flags: remove -MD, -MF <path>, -frandom-seed=, redirect -o
-    cleaned = [parts[0]]
+    new_parts = [parts[0]]
     skip_next = False
     for idx, p in enumerate(parts[1:], 1):
         if skip_next:
@@ -192,30 +160,32 @@ for block in blocks:
         if p == '-MF':
             skip_next = True
             continue
+        if p == '-z' or p.startswith('-z '):
+            skip_next = p == '-z'  # strip linker flag: -z <arg> or '-z arg'
+            continue
         if p.startswith('-frandom-seed='):
             continue
         if p == '-o':
             skip_next = True
             base = os.path.basename(parts[idx + 1]) if idx + 1 < len(parts) else "out.o"
-            cleaned.extend(['-o', os.path.join(tmpdir, base)])
+            new_parts.extend(['-o', os.path.join(tmpdir, base)])
             continue
-        cleaned.append(p)
+        new_parts.append(p)
 
-    abs_source = source_file if os.path.isabs(source_file) else os.path.join(exec_root, source_file)
-    compile_commands.append({
-        "directory": exec_root,
-        "command": ' '.join(cleaned),
-        "file": abs_source
+    cleaned.append({
+        "directory": entry.get("directory", ""),
+        "command": ' '.join(new_parts),
+        "file": source_file
     })
 
 with open(output_file, 'w') as f:
-    json.dump(compile_commands, f, indent=2)
+    json.dump(cleaned, f, indent=2)
 
-print(f"Extracted {len(compile_commands)} compile commands -> {output_file}")
+print(f"Cleaned {len(cleaned)} compile commands -> {output_file}")
 PYTHON_SCRIPT
 
 if [[ ! -s "$COMPILE_DB" ]]; then
-    echo "ERROR: No compile commands extracted."
+    echo "ERROR: No compile commands after cleaning."
     exit 1
 fi
 
@@ -226,6 +196,52 @@ echo "Found $COUNT compilation units."
 
 echo ""
 echo "=== Step 2/4: Building CodeQL database ==="
+
+# Detect compiler from first entry in compile_commands.json
+COMPILER="$(python3 -c "
+import json
+entry = json.load(open('$COMPILE_DB'))[0]
+parts = entry.get('command', '').split()
+print(parts[0])
+")"
+echo "Compiler: $COMPILER"
+
+# Hedron's compile_commands reference files via Bazel's external/ convenience symlinks
+# (e.g. external/score_lifecycle_health+/...). The CodeQL extractor resolves symlinks,
+# so archived files end up under the Bazel output_base/external/ path.
+# The source root must match these resolved paths for CodeQL to classify them as "user code".
+#
+# Auto-detect the primary source repo from compile commands: pick the external repo
+# containing the most .cpp/.cc source files, excluding toolchain and third-party repos.
+SOURCE_REPO="$(python3 -c "
+import json, re
+from collections import Counter
+entries = json.load(open('$COMPILE_DB'))
+repos = []
+for e in entries:
+    f = e.get('file', '')
+    if not f.endswith(('.cpp', '.cc', '.c', '.cxx')):
+        continue
+    m = re.match(r'external/([^/]+)/', f)
+    if m:
+        name = m.group(1)
+        # Skip toolchains, test frameworks, and codegen libraries
+        if any(x in name for x in ['toolchain', 'googletest', 'flatbuffers', 'rules_']):
+            continue
+        repos.append(name)
+c = Counter(repos)
+if c:
+    print(c.most_common(1)[0][0])
+")"
+
+if [[ -z "$SOURCE_REPO" ]]; then
+    echo "WARNING: Could not detect source repo from compile commands. Using broad source root."
+    SOURCE_ROOT="$OUTPUT_BASE/external"
+else
+    SOURCE_ROOT="$OUTPUT_BASE/external/$SOURCE_REPO"
+    echo "Detected source repo: $SOURCE_REPO"
+fi
+echo "Source root: $SOURCE_ROOT"
 
 rm -rf "$DB_DIR"
 "$CODEQL" database init "$DB_DIR" --language=cpp --source-root="$SOURCE_ROOT"
@@ -245,25 +261,37 @@ mkdir -p "$CODEQL_EXTRACTOR_CPP_TRAP_DIR" \
          "$CODEQL_EXTRACTOR_CPP_SCRATCH_DIR" \
          "$CODEQL_EXTRACTOR_CPP_DIAGNOSTIC_DIR"
 
-ok=0
-fail=0
+JOBS="$(nproc)"
+echo "Running extraction with $JOBS parallel jobs..."
 
-python3 -c "
-import json
-for c in json.load(open('$COMPILE_DB')):
-    parts = c['command'].split()
-    print(' '.join(parts[1:]))
-" | while IFS= read -r args; do
-    i=$((ok + fail + 1))
-    cd "$EXEC_ROOT"
-    if "$EXTRACTOR" --mimic "$COMPILER" $args 2>/dev/null; then
-        ok=$((ok + 1))
-        echo -ne "\r  Extracted $ok / $COUNT (failed: $fail)"
-    else
-        fail=$((fail + 1))
-        echo -ne "\r  Extracted $ok / $COUNT (failed: $fail)"
-    fi
-done
+# Generate a shell script per compile command, then run in parallel.
+# This avoids env-var and quoting issues with xargs subshells.
+JOBDIR="$(mktemp -d "${TMPDIR:-/tmp}/codeql-jobs-XXXXXX")"
+
+python3 - "$COMPILE_DB" "$JOBDIR" "$EXTRACTOR" "$COMPILER" <<'PYSCRIPT'
+import json, os, sys
+
+compile_db = sys.argv[1]
+jobdir     = sys.argv[2]
+extractor  = sys.argv[3]
+compiler   = sys.argv[4]
+
+entries = json.load(open(compile_db))
+for i, entry in enumerate(entries):
+    parts = entry.get("command", "").split()
+    if not parts:
+        continue
+    directory = entry.get("directory", ".")
+    args = " ".join(parts[1:])
+    script = os.path.join(jobdir, f"job_{i:04d}.sh")
+    with open(script, "w") as f:
+        f.write(f'#!/bin/bash\ncd {directory!r} && {extractor!r} --mimic {compiler!r} {args} 2>/dev/null || true\n')
+    os.chmod(script, 0o755)
+print(f"Generated {len(entries)} job scripts")
+PYSCRIPT
+
+find "$JOBDIR" -name "job_*.sh" | sort | xargs -P "$JOBS" -I {} bash {} || true
+rm -rf "$JOBDIR"
 
 echo ""
 

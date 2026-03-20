@@ -47,6 +47,14 @@ archive_override(
     urls = ["https://github.com/nelhage/rules_boost/archive/refs/heads/master.tar.gz"],
 )
 
+# Hedron's Compile Commands Extractor for IDE support and CodeQL analysis
+bazel_dep(name = "hedron_compile_commands", dev_dependency = True)
+git_override(
+    module_name = "hedron_compile_commands",
+    commit = "1e08f8e0507b6b6b1f4416a9a22cf5c28beaba93",
+    remote = "https://github.com/hedronvision/bazel-compile-commands-extractor.git",
+)
+
 # Implicit dependencies for score_tooling
 bazel_dep(name = "aspect_rules_lint", version = "2.0.0")
 bazel_dep(name = "buildifier_prebuilt", version = "8.2.0.2")
