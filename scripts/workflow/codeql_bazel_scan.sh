@@ -116,16 +116,12 @@ if [[ ! -s "$HEDRON_COMPILE_DB" ]]; then
     exit 1
 fi
 
-# Clean the compile commands for CodeQL:
-#   - Strip -MD / -MF <path> (dependency files target read-only Bazel dirs)
-#   - Strip -frandom-seed= (not needed for extraction)
-#   - Redirect -o to temp dir (output objects target read-only Bazel dirs)
-python3 - "$HEDRON_COMPILE_DB" "$COMPILE_DB" "$TMPDIR_OBJ" <<'PYTHON_SCRIPT'
-import json, os, sys
+# Clean the compile commands for CodeQL — only strip -z <arg> for now
+python3 - "$HEDRON_COMPILE_DB" "$COMPILE_DB" <<'PYTHON_SCRIPT'
+import json, sys
 
 input_file  = sys.argv[1]
 output_file = sys.argv[2]
-tmpdir      = sys.argv[3]
 
 with open(input_file) as f:
     commands = json.load(f)
@@ -134,18 +130,11 @@ cleaned = []
 for entry in commands:
     parts = entry.get("command", "").split()
     if not parts:
-        # Try "arguments" format instead
         parts = entry.get("arguments", [])
     if not parts:
         continue
 
-    # Find source file
     source_file = entry.get("file", "")
-    if not source_file:
-        for p in reversed(parts):
-            if p.endswith(('.cpp', '.cc', '.c', '.cxx')):
-                source_file = p
-                break
     if not source_file:
         continue
 
@@ -155,20 +144,8 @@ for entry in commands:
         if skip_next:
             skip_next = False
             continue
-        if p == '-MD':
-            continue
-        if p == '-MF':
-            skip_next = True
-            continue
         if p == '-z' or p.startswith('-z '):
-            skip_next = p == '-z'  # strip linker flag: -z <arg> or '-z arg'
-            continue
-        if p.startswith('-frandom-seed='):
-            continue
-        if p == '-o':
-            skip_next = True
-            base = os.path.basename(parts[idx + 1]) if idx + 1 < len(parts) else "out.o"
-            new_parts.extend(['-o', os.path.join(tmpdir, base)])
+            skip_next = p == '-z'
             continue
         new_parts.append(p)
 
@@ -285,7 +262,7 @@ for i, entry in enumerate(entries):
     args = " ".join(parts[1:])
     script = os.path.join(jobdir, f"job_{i:04d}.sh")
     with open(script, "w") as f:
-        f.write(f'#!/bin/bash\ncd {directory!r} && {extractor!r} --mimic {compiler!r} {args} 2>/dev/null || true\n')
+        f.write(f'#!/bin/bash\ncd {directory!r} && {extractor!r} --mimic {compiler!r} {args}\n')
     os.chmod(script, 0o755)
 print(f"Generated {len(entries)} job scripts")
 PYSCRIPT
