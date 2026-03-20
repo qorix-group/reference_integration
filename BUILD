@@ -70,7 +70,7 @@ use_format_targets()
 refresh_compile_commands(
     name = "refresh_compile_commands",
     targets = {
-        "@score_lifecycle_health//src/...": "--config=linux-x86_64",
+        "@score_baselibs//score/...": "--config=linux-x86_64",
     },
 )
 
