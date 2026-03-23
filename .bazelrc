@@ -82,3 +82,6 @@ try-import %workspace%/user.bazelrc
 
 # Try import setting from home (CI setup-bazel action for caching uses this to provide proper args like --disk-cache)
 try-import ~/.bazelrc
+
+# Qorix Performance additional settings
+common --allow_yanked_versions score_communication@0.1.3
