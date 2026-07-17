@@ -17,6 +17,7 @@ score_pkg_bundle(
     bins = ["//showcases/cli"],
     other_package_files = [
         "//showcases/standalone:comm_pkg_files",
+        "//showcases/standalone/comm_fit:comm_fit_pkg_files",
         "//showcases/standalone:kyron_pkg_files",
         "//showcases/standalone:time_pkg_files",
         "//showcases/standalone:logging_pkg_files",
