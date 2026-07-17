@@ -34,6 +34,7 @@
                 "hash": "313f1178628189d267c8cd0d75971bdac04c20ee",
                 "bazel_patches": [
                     "//patches/communication:001-expose-comm-examples.patch",
+                    "//patches/communication:002-expose-com-api-gen.patch",
                     "//patches/communication:003-module-deps-visibility.patch",
                     "//patches/communication:004-rules-build-error-not-dev-dependency.patch"
                 ],
@@ -57,12 +58,7 @@
                         "rust"
                     ],
                     "rust_coverage_config": "ferrocene-coverage"
-                },
-                "bazel_patches": [
-                    "//patches/communication:001-expose-comm-examples.patch",
-                    "//patches/communication:003-module-deps-visibility.patch",
-                    "//patches/communication:004-rules-build-error-not-dev-dependency.patch"
-                ]
+                }
             },
             "score_persistency": {
                 "repo": "https://github.com/eclipse-score/persistency.git",
