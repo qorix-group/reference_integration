@@ -3,41 +3,61 @@
         "target_sw": {
             "score_baselibs": {
                 "repo": "https://github.com/eclipse-score/baselibs.git",
-                "version": "0.2.9",
+                "hash": "06f6b9b7d48710438ea4664d84da5143594763cb",
                 "bazel_patches": [
                     "//patches/baselibs:001-restore-trace-library-mock-visibility.patch"
                 ],
                 "metadata": {
                     "extra_test_config": [
-                        "@score_baselibs//score/json:base_library=nlohmann",
-                        "@score_baselibs//score/memory/shared/flags:use_typedshmd=False"
+                        "@score_baselibs//score/json:base_library=nlohmann"
                     ],
                     "exclude_test_targets": [
+                        "//score/language/safecpp/aborts_upon_exception:abortsuponexception_toolchain_test"
+                    ],
+                    "langs": [
+                        "cpp"
+                    ],
+                    "bazel_config": [
+                        "stage2-gcc",
+                        "stage2-rust",
+                        "stage2-baselibs-flags"
+                    ],
+                    "exclude_test_target_reasons": {
+                        "//score/language/safecpp/aborts_upon_exception:abortsuponexception_toolchain_test": "Intentionally-failing upstream target (eclipse-score/baselibs#7): asserts an aborts_upon_exception feature no S-CORE toolchain implements; tags=[\"unit\"], so no tag filter removes it."
+                    },
+                    "legacy_exclude_test_targets": [
                         "//score/language/safecpp/aborts_upon_exception:abortsuponexception_toolchain_test",
                         "//score/containers:dynamic_array_test",
                         "//score/mw/log/configuration:*",
                         "//score/json/examples:*",
-                        "//score/flatbuffers/examples/config_usecase:demo_app"
-                    ],
-                    "langs": [
-                        "cpp"
+                        "//score/flatbuffers:version_reader_test"
                     ]
                 }
             },
             "score_communication": {
                 "repo": "https://github.com/eclipse-score/communication.git",
-                "hash": "0e0640998096049a8dd65a4173b03a988d5a85a7",
+                "hash": "21652a6196c22bdf89e0a0abb34aabeb79eb26a0",
                 "bazel_patches": [
                     "//patches/communication:001-expose-comm-examples.patch",
-                    "//patches/communication:003-module-deps-visibility.patch"
+                    "//patches/communication:003-module-deps-visibility.patch",
+                    "//patches/communication:004-rules-build-error-not-dev-dependency.patch"
                 ],
                 "metadata": {
-                    "code_root_path": "//score/mw/com/impl/...",
-                    "exclude_test_targets": [
+                    "code_root_path": "//...",
+                    "extra_test_config": [
+                        "@score_communication//score/memory/shared/flags:use_typedshmd=False"
+                    ],
+                    "exclude_test_targets": [],
+                    "bazel_config": [
+                        "stage2-rust",
+                        "stage2-baselibs-flags"
+                    ],
+                    "legacy_exclude_test_targets": [
                         "//score/mw/com/impl:unit_test_runtime_single_exec",
                         "//score/mw/com/impl:runtime_test",
                         "//score/mw/com/impl/configuration:config_parser_test",
                         "//score/mw/com/impl/configuration:configuration_test",
+                        "//score/mw/com/impl/configuration:configuration_json_parsing_strategy_test",
                         "//score/mw/com/impl/tracing/configuration:tracing_filter_config_parser_test",
                         "//score/mw/com/impl/tracing:tracing_runtime_test",
                         "//score/mw/com/impl/bindings/lola/tracing:tracing_runtime_test"
@@ -46,13 +66,15 @@
             },
             "score_persistency": {
                 "repo": "https://github.com/eclipse-score/persistency.git",
-                "hash": "35a937f34ff5b2daad8df56e36de76687f19d631",
+                "hash": "b987d375e54f038c31f9441fa738c747c7a07c75",
                 "bazel_patches": [
-                    "//patches/persistency:001-fix-doc.patch"
+                    "//patches/persistency:001-fix-doc.patch",
+                    "//patches/persistency:002-fix-dev-dep.patch",
+                    "//patches/persistency:003-fix-docs-version.patch"
                 ],
                 "metadata": {
                     "extra_test_config": [
-                        "@score_baselibs//src/log:safety_level=qm",
+                        "@score_baselibs//score/log_rust:safety_level=qm",
                         "@score_baselibs//score/json:base_library=nlohmann",
                         "@score_logging//score/mw/log/flags:KRemote_Logging=False"
                     ],
@@ -60,16 +82,18 @@
                     "exclude_test_targets": [
                         "//src/cpp/tests:bm_kvs_cpp"
                     ],
-                    "rust_coverage_config": "ferrocene-coverage-per"
-                }
-            },
-            "score_orchestrator": {
-                "repo": "https://github.com/eclipse-score/orchestrator.git",
-                "hash": "c5bcbd39fc6e124a26b1d66abbfc696a3319c2a4",
-                "metadata": {
-                    "code_root_path": "//src/...",
-                    "langs": [
-                        "rust"
+                    "rust_coverage_config": "ferrocene-coverage-per",
+                    "bazel_config": [
+                        "stage2-gcc",
+                        "stage2-rust",
+                        "stage2-communication-flags",
+                        "stage2-baselibs-flags"
+                    ],
+                    "exclude_test_target_reasons": {
+                        "//src/cpp/tests:bm_kvs_cpp": "google_benchmark benchmark declared as a cc_test; a timing measurement, not a correctness test, so it is not meaningful in a UT/coverage run."
+                    },
+                    "legacy_exclude_test_targets": [
+                        "//src/cpp/tests:bm_kvs_cpp"
                     ]
                 }
             },
@@ -80,50 +104,118 @@
                     "code_root_path": "//src/...",
                     "langs": [
                         "rust"
+                    ],
+                    "bazel_config": [
+                        "stage2-gcc",
+                        "stage2-rust"
                     ]
                 }
             },
             "score_lifecycle_health": {
                 "repo": "https://github.com/eclipse-score/lifecycle.git",
-                "hash": "654ac348e1cb9327e5c8c4d84fd0028ad3ef2714",
+                "hash": "23e9849437c578ade99b8ccbf5d09c1835737b3f",
                 "bazel_patches": [],
                 "metadata": {
                     "code_root_path": "//score/...",
                     "exclude_test_targets": [
                         "//score/health_monitor/src/rust:miri_tests",
                         "//score/launch_manager/src/daemon/src/common/concurrency:mpmc_concurrent_queue_tsan_test"
+                    ],
+                    "bazel_config": [
+                        "stage2-gcc",
+                        "stage2-rust",
+                        "stage2-baselibs-flags"
+                    ],
+                    "exclude_test_target_reasons": {
+                        "//score/health_monitor/src/rust:miri_tests": "miri_test rule (tags=[\"miri\"]); ref_int registers no miri toolchain, so the target fails toolchain resolution during analysis, before any tag filter applies.",
+                        "//score/launch_manager/src/daemon/src/common/concurrency:mpmc_concurrent_queue_tsan_test": "cc_test built with -fsanitize=thread (tags=[\"tsan\",\"no-coverage\"]); gcov-instrumenting a TSAN binary reports false races on the non-atomic __gcov* counters. The no-coverage tag already drops it from the run."
+                    },
+                    "legacy_exclude_test_targets": [
+                        "//score/health_monitor/src/rust:miri_tests",
+                        "//score/launch_manager/src/daemon/src/common/concurrency:mpmc_concurrent_queue_tsan_test",
+                        "//score/launch_manager/src/daemon/src/common/concurrency:mpsc_bounded_queue_tsan_test"
                     ]
                 }
             },
             "score_logging": {
                 "repo": "https://github.com/eclipse-score/logging.git",
-                "hash": "6282f3a2ec6b1eeeab87c8e9a4435c586bcf9973",
+                "hash": "6d8fcb3734e3f3307615bae5495d2d3a82b0b8c4",
                 "bazel_patches": [
-                    "//patches/logging:002-needs-json-deps-not-dev-dependency.patch",
-                    "//patches/logging:003-docs-as-code-not-dev-dependency.patch"
-
+                    "//patches/logging:006-use-format-targets-compat.patch"
                 ],
                 "metadata": {
-                    "code_root_path": "//score/mw/log/...",
+                    "code_root_path": "//...",
                     "extra_test_config": [
-                        "@score_logging//score/datarouter/build_configuration_flags:persistent_logging=False",
-                        "@score_logging//score/datarouter/build_configuration_flags:persistent_config_feature_enabled=False",
                         "@score_logging//score/datarouter/build_configuration_flags:enable_nonverbose_dlt=False",
                         "@score_logging//score/datarouter/build_configuration_flags:enable_dynamic_configuration=False",
                         "@score_logging//score/datarouter/build_configuration_flags:file_transfer=False",
                         "@score_logging//score/datarouter/build_configuration_flags:use_local_vlan=True"
                     ],
-                    "exclude_test_targets": [
+                    "exclude_test_targets": [],
+                    "bazel_config": [
+                        "stage2-gcc",
+                        "stage2-rust",
+                        "stage2-communication-flags",
+                        "stage2-baselibs-flags"
+                    ],
+                    "legacy_exclude_test_targets": [
                         "//score/mw/log/legacy_non_verbose_api:unit_test"
                     ]
                 }
             },
             "score_time": {
                 "repo": "https://github.com/eclipse-score/time.git",
-                "hash": "414d4ce4d984e461db8153c95eceb9d5a2020f57",
+                "hash": "8c42d34698535dabeaa4782d5ec123256151fb30",
+                "bazel_patches": [
+                    "//patches/time:001-memory-shared-moved-to-communication.patch",
+                    "//patches/time:002-lifecycle-client-moved-to-launch-manager.patch"
+                ],
                 "metadata": {
                     "langs": [
                         "cpp"
+                    ],
+                    "bazel_config": [
+                        "stage2-gcc",
+                        "stage2-communication-flags",
+                        "stage2-baselibs-flags"
+                    ]
+                }
+            },
+            "score_config_management": {
+                "repo": "https://github.com/eclipse-score/config_management.git",
+                "hash": "952461ceffff774fb4c125ee023fea0221fcdce2",
+                "bazel_patches": [
+                    "//patches/config_management:001-adapt-proxy-api-and-remove-internal-targets.patch"
+                ],
+                "metadata": {
+                    "code_root_path": "//score/config_management/...",
+                    "extra_test_config": [
+                        "@score_config_management//score/config_management/config_daemon/code:score_variant=true"
+                    ],
+                    "exclude_test_targets": [
+                        "//score/config_management/config_daemon/code/factory/details:unit_test_mw_com",
+                        "//score/config_management/config_provider/code/config_provider/factory:unit_tests_mw_com",
+                        "//score/config_management/dependability/..."
+                    ],
+                    "langs": [
+                        "cpp"
+                    ],
+                    "exclude_test_target_reasons": {
+                        "//score/config_management/config_daemon/code/factory/details:unit_test_mw_com": "tags=[\"exclusive\"] upstream for LoLa message passing 2.0 sandboxing (Ticket-217341); mw_com service discovery does not come up in Stage 2 and 4 TestFactoryMwImpl cases fail.",
+                        "//score/config_management/config_provider/code/config_provider/factory:unit_tests_mw_com": "tags=[\"exclusive\"] upstream for LoLa message passing 2.0 sandboxing (Ticket-217341); mw_com service discovery does not come up in Stage 2 and ConfigProviderFactoryTest.FoundServiceDuringCreation times out.",
+                        "//score/config_management/dependability/...": "No test rules (component()/dependable_element(), tests=[]); analysis fails because dependability/BUILD references :config_daemon_app_unit and :config_provider_details_unit, declared nowhere in the module."
+                    },
+                    "legacy_exclude_test_targets": [
+                        "//score/config_management/config_daemon/code/factory/details:unit_test_mw_com",
+                        "//score/config_management/config_daemon/code/services/details/mw_com:unit_test",
+                        "//score/config_management/config_provider/code/config_provider/factory:unit_tests_mw_com",
+                        "//score/config_management/config_provider/code/proxies/details:unit_test_mw",
+                        "//score/config_management/dependability/..."
+                    ],
+                    "bazel_config": [
+                        "stage2-gcc",
+                        "stage2-communication-flags",
+                        "stage2-baselibs-flags"
                     ]
                 }
             }
@@ -131,11 +223,11 @@
         "tooling": {
             "score_crates": {
                 "repo": "https://github.com/eclipse-score/score-crates.git",
-                "hash": "a5f4f5765acc83f9c23b0b12860e130b9ebef3a7"
+                "hash": "4656dda8f04a3d88c8089f63111195840cfbd9e3"
             },
             "score_itf": {
                 "repo": "https://github.com/eclipse-score/itf.git",
-                "hash": "bf5294d7618e361c224edbd754060cee810285eb"
+                "hash": "802e0186d373e0d9d67c1c9ccb1ea08952c7ad06"
             },
             "score_tooling": {
                 "repo": "https://github.com/eclipse-score/tooling.git",
@@ -147,7 +239,7 @@
             },
             "score_bazel_platforms": {
                 "repo": "https://github.com/eclipse-score/bazel_platforms.git",
-                "hash": "82b6df6ce93fb2960c52d992939fc6c3cf0e1f0f"
+                "hash": "607672cdf2f05f21af7113dab0849726dd59bf86"
             },
             "score_test_scenarios": {
                 "repo": "https://github.com/eclipse-score/testing_tools.git",
@@ -160,8 +252,13 @@
             "score_process": {
                 "repo": "https://github.com/eclipse-score/process_description.git",
                 "hash": "8df530cab5efcb40e9f835ba6e9b61ae2f0175c7"
+            },
+            "score_bazel_cpp_toolchains": {
+                "repo": "https://github.com/eclipse-score/bazel_cpp_toolchains.git",
+                "version": "1.0.3",
+                "pin_version": true
             }
         }
     },
-    "timestamp": "2026-07-03T00:00:00+00:00Z"
+    "timestamp": "2026-08-21T00:00:00+00:00Z"
 }

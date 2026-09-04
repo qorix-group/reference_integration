@@ -11,8 +11,8 @@
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
 
-# Generated from known_good.json at 2026-07-03T00:00:00+00:00Z
-# Do not edit manually - use scripts/known_good/update_module_from_known_good.py
+# Generated from known_good.json at 2026-08-21T00:00:00+00:00Z
+# Do not edit manually - use scripts/known_good/update_module_from_known_good.py --known known_good.json --output-dir-modules bazel_common
 
 load("@score_tooling//:defs.bzl", "rust_coverage_report")
 
@@ -22,7 +22,7 @@ rust_coverage_report(
         "linux-x86_64",
         "ferrocene-coverage",
     ],
-    query = 'kind("rust_test", @score_communication//score/mw/com/impl/...) -@score_communication//score/mw/com/impl:unit_test_runtime_single_exec -@score_communication//score/mw/com/impl:runtime_test -@score_communication//score/mw/com/impl/configuration:config_parser_test -@score_communication//score/mw/com/impl/configuration:configuration_test -@score_communication//score/mw/com/impl/tracing/configuration:tracing_filter_config_parser_test -@score_communication//score/mw/com/impl/tracing:tracing_runtime_test -@score_communication//score/mw/com/impl/bindings/lola/tracing:tracing_runtime_test',
+    query = 'kind("rust_test", @score_communication//...)',
     visibility = ["//visibility:public"],
 )
 
@@ -33,16 +33,6 @@ rust_coverage_report(
         "ferrocene-coverage-per",
     ],
     query = 'kind("rust_test", @score_persistency//src/...) -@score_persistency//src/cpp/tests:bm_kvs_cpp',
-    visibility = ["//visibility:public"],
-)
-
-rust_coverage_report(
-    name = "rust_coverage_score_orchestrator",
-    bazel_configs = [
-        "linux-x86_64",
-        "ferrocene-coverage",
-    ],
-    query = 'kind("rust_test", @score_orchestrator//src/...)',
     visibility = ["//visibility:public"],
 )
 
@@ -72,6 +62,6 @@ rust_coverage_report(
         "linux-x86_64",
         "ferrocene-coverage",
     ],
-    query = 'kind("rust_test", @score_logging//score/mw/log/...) -@score_logging//score/mw/log/legacy_non_verbose_api:unit_test',
+    query = 'kind("rust_test", @score_logging//...)',
     visibility = ["//visibility:public"],
 )
