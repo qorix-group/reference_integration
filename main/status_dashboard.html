@@ -256,12 +256,89 @@
       border-top: 1px solid var(--border);
       padding-top: 1rem;
     }
+    /* ── Tabs (new) ─────────────────────────────────────────────── */
+    .tabs {
+      max-width: 1400px;
+      margin: 0 auto 1.2rem;
+      display: flex;
+      gap: 0.5rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.3rem;
+    }
+    .tab-btn {
+      font-size: 0.85rem;
+      padding: 0.4rem 0.9rem;
+      border-radius: 6px 6px 0 0;
+      border-bottom: none;
+    }
+    .tab-btn.active {
+      background: var(--bg);
+      color: #e6edf3;
+      border-color: var(--accent);
+    }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* SBOM / Tools table */
+    .sbom-table-wrap {
+      max-width: 1400px;
+      margin: 0 auto 1.5rem;
+      overflow-x: auto;
+    }
+    .sbom-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+    }
+    .sbom-table th,
+    .sbom-table td {
+      padding: 0.45rem 0.6rem;
+      text-align: left;
+      vertical-align: top;
+      border-bottom: 1px solid var(--border);
+    }
+    .sbom-table thead th {
+      position: sticky;
+      top: 0;
+      background: var(--bg);
+      color: #e6edf3;
+      font-weight: 600;
+    }
+    .sbom-table tbody tr:hover td {
+      background: #161b22;
+    }
+
+    /* Traceability */
+    .trace-section {
+      max-width: 1400px;
+      margin: 0 auto 1.5rem;
+      font-size: 0.85rem;
+    }
+    .trace-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem 1.1rem;
+      margin-bottom: 1rem;
+    }
+    .trace-links a {
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 0.82rem;
+    }
+    .trace-links a:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
   <header>
-    <h1>Known Good Status</h1>
-    <p class="subtitle">Snapshot: 2026-07-03T00:00:00+00:00Z</p>
+    <h1>Integration Dashboard</h1>
+    <p class="subtitle">Snapshot: 2026-08-28T09:19:12Z</p>
+
+    <div class="tabs" id="main-tabs">
+      <button class="tab-btn active" data-tab="modules">Modules</button>
+      <button class="tab-btn" data-tab="traceability">Traceability</button>
+      <button class="tab-btn" data-tab="sbom-tools">SBOM & Tools</button>
+    </div>
 
     <div class="header-row">
       <div id="summary"><!-- filled by JS --></div>
@@ -272,33 +349,148 @@
     </div>
   </header>
 
-  <div class="pat-notice">
-    <span>&#128274; Add a <strong>GitHub personal access token (PAT)</strong> for <em>live</em> status — exact commit counts fetched directly from GitHub.
-    Enter it in the token field above, or
-    <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">create one here</a>.
-    Without a token, up-to-date / behind status is still shown from data embedded at report generation time.
-    <strong>Your PAT is not sent anywhere — it is only kept in the local cache of this page.</strong></span>
-  </div>
+  <!-- Modules tab (existing) -->
+  <section id="tab-modules" class="tab-panel active">
+    <div class="pat-notice">
+      <span>&#128274; Add a <strong>GitHub personal access token (PAT)</strong> for <em>live</em> status — exact commit counts fetched directly from GitHub.
+      Enter it in the token field above, or
+      <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">create one here</a>.
+      Without a token, up-to-date / behind status is still shown from data embedded at report generation time.
+      <strong>Your PAT is not sent anywhere — it is only kept in the local cache of this page.</strong></span>
+    </div>
 
-  <div id="filters"></div>
-  <div id="grid"></div>
+    <div id="filters"></div>
+    <div id="grid"></div>
 
-  <footer>
-    Commits-behind data fetched live from the GitHub REST API.
-  </footer>
+    <footer>
+      Commits-behind data fetched live from the GitHub REST API.
+    </footer>
+  </section>
+
+  <!-- Traceability tab (ISO 26262) -->
+  <section id="tab-traceability" class="tab-panel">
+    <div class="trace-section">
+      <h2 style="font-size:1.1rem; margin-bottom:0.5rem;">Traceability Overview</h2>
+      <p style="color:var(--muted); font-size:0.82rem; margin-bottom:0.75rem;">
+        This tab provides an overview of requirements, architecture, and test traceability for the S-CORE reference integration.
+        Detailed models are maintained in Sphinx with sphinx-needs and linked below.
+      </p>
+
+      <div class="trace-card">
+        <h3 style="font-size:0.95rem; margin-bottom:0.4rem;">Requirements & Architecture</h3>
+        <p style="color:var(--muted); font-size:0.82rem; margin-bottom:0.4rem;">
+          Central documentation and needs-based traceability are published via Sphinx. Use the links below to inspect coverage between requirements, design, tests, and components.
+        </p>
+        <div class="trace-links">
+          <ul style="padding-left:1.2rem; margin-top:0.25rem;">
+            <li><a href="https://eclipse-score.github.io/reference_integration" target="_blank" rel="noopener">Reference Integration Docs</a></li>
+            <li><a href="https://eclipse-score.github.io/score/main/" target="_blank" rel="noopener">S-CORE Project Documentation</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="trace-card">
+        <h3 style="font-size:0.95rem; margin-bottom:0.4rem;">ISO 26262 Alignment</h3>
+        <p style="color:var(--muted); font-size:0.82rem;">
+          For ISO 26262, this view will be extended to expose:
+        </p>
+        <ul style="padding-left:1.2rem; margin-top:0.25rem; color:var(--text); font-size:0.82rem;">
+          <li>Traceability from system requirements → software components → tests.</li>
+          <li>Links to Safety Sentinel–based checks in the Bazel build.</li>
+          <li>Automated coverage metrics derived from Sphinx-Needs exports (future).</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- SBOM & Tools tab -->
+  <section id="tab-sbom-tools" class="tab-panel">
+    <div style="max-width:1400px; margin:0 auto 1rem;">
+      <h2 style="font-size:1.1rem; margin-bottom:0.35rem;">SBOM & Tool Qualification</h2>
+      <p style="color:var(--muted); font-size:0.82rem;">
+        Product SBOM (ISO 26262) and tool qualification overview for the S-CORE reference integration.
+      </p>
+    </div>
+
+    <!-- Product SBOM -->
+    <div style="max-width:1400px; margin:0 auto 1.5rem;">
+      <h3 style="font-size:0.95rem; margin-bottom:0.5rem;">Product SBOM</h3>
+      <p id="sbom-summary" style="color:var(--muted); font-size:0.82rem; margin-bottom:0.5rem;"></p>
+
+      <div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:0.75rem;">
+        <input id="sbom-search" type="text" placeholder="Filter packages (name, license, supplier)…"
+               style="background:var(--surface); border:1px solid var(--border); color:var(--text); padding:0.35rem 0.7rem; border-radius:var(--radius); font-size:0.82rem; width:260px;" />
+      </div>
+
+      <div class="sbom-table-wrap">
+        <table class="sbom-table" id="sbom-table">
+          <thead>
+            <tr>
+              <th>Package</th>
+              <th>Version</th>
+              <th>Supplier</th>
+              <th>Licenses</th>
+            </tr>
+          </thead>
+          <tbody id="sbom-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Tool Qualification -->
+    <div style="max-width:1400px; margin:0 auto 1.5rem;">
+      <h3 style="font-size:0.95rem; margin-bottom:0.4rem;">Tool Qualification (ISO 26262)</h3>
+      <p style="color:var(--muted); font-size:0.82rem; margin-bottom:0.5rem;">
+        Tools used in the build, analysis, and verification pipeline are documented separately and linked here.
+        Detailed qualification information is maintained in the S-CORE tooling documentation.
+      </p>
+
+      <div class="trace-card">
+        <h4 style="font-size:0.9rem; margin-bottom:0.35rem;">Static Analysis & Code Quality</h4>
+        <div class="trace-links">
+          <ul style="padding-left:1.2rem; margin-top:0.25rem;">
+            <li><a href="https://eclipse-score.github.io/score/main/score_tools/tools_static_analysis_code_quality/index.html" target="_blank" rel="noopener">Static Analysis & Code Quality Tools</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="trace-card">
+        <h4 style="font-size:0.9rem; margin-bottom:0.35rem;">SBOM & Dependency Tools</h4>
+        <p style="color:var(--muted); font-size:0.82rem;">
+          SBOM generation and dependency analysis tools (e.g., Syft, Grype) are configured in CI and documented as part of the tooling landscape.
+          A dedicated tool-qualification table will be added here once a central manifest is available.
+        </p>
+      </div>
+    </div>
+  </section>
 
   <script>
+    // ── Tab switching ───────────────────────────────────────────────
+    (function() {
+      const tabs = document.querySelectorAll('#main-tabs .tab-btn');
+      const panels = document.querySelectorAll('.tab-panel');
+      tabs.forEach(btn => {
+        btn.addEventListener('click', () => {
+          const target = btn.dataset.tab;
+          tabs.forEach(t => t.classList.remove('active'));
+          panels.forEach(p => p.classList.remove('active'));
+          btn.classList.add('active');
+          document.getElementById('tab-' + target).classList.add('active');
+        });
+      });
+    })();
+
     const MODULES = [
   {
     "name": "score_baselibs",
     "group": "target_sw",
     "repo": "https://github.com/eclipse-score/baselibs.git",
     "owner_repo": "eclipse-score/baselibs",
-    "hash": "ce204159f37ee7815907369a8f678583bf102306",
-    "version": "0.2.9",
+    "hash": "c44eca5a9e35acb47287291a877a09b8d6e903ba",
+    "version": null,
     "branch": "main",
-    "current_hash": "73c25fe65a513c757bff67edb4067b58ed04ddfa",
-    "behind_by": 88,
+    "current_hash": "4abf22407106ec2461f5f80a619cd15b5d294238",
+    "behind_by": 46,
     "compare_status": "ahead"
   },
   {
@@ -306,11 +498,11 @@
     "group": "target_sw",
     "repo": "https://github.com/eclipse-score/communication.git",
     "owner_repo": "eclipse-score/communication",
-    "hash": "0e0640998096049a8dd65a4173b03a988d5a85a7",
+    "hash": "313f1178628189d267c8cd0d75971bdac04c20ee",
     "version": null,
     "branch": "main",
-    "current_hash": "85a9c403756147ed1f8f4c051d9c911e77ce6f7b",
-    "behind_by": 126,
+    "current_hash": "aa2db6f28fa818de30ccd3ecc9835393785bbf22",
+    "behind_by": 34,
     "compare_status": "ahead"
   },
   {
@@ -318,46 +510,34 @@
     "group": "target_sw",
     "repo": "https://github.com/eclipse-score/persistency.git",
     "owner_repo": "eclipse-score/persistency",
-    "hash": "35a937f34ff5b2daad8df56e36de76687f19d631",
+    "hash": "9ae529ba9f413976ff5c9948c6490afa51bbfdc3",
     "version": null,
     "branch": "main",
-    "current_hash": "71dafa712fb514b4705f1b914e1f72b3e385da5b",
-    "behind_by": 11,
-    "compare_status": "ahead"
-  },
-  {
-    "name": "score_orchestrator",
-    "group": "target_sw",
-    "repo": "https://github.com/eclipse-score/orchestrator.git",
-    "owner_repo": "eclipse-score/orchestrator",
-    "hash": "c5bcbd39fc6e124a26b1d66abbfc696a3319c2a4",
-    "version": null,
-    "branch": "main",
-    "current_hash": "c5bcbd39fc6e124a26b1d66abbfc696a3319c2a4",
-    "behind_by": 0,
-    "compare_status": "identical"
+    "current_hash": "84d73574d2fce7580e6efa18c3d7a0b1fe418a67",
+    "behind_by": 17,
+    "compare_status": "diverged"
   },
   {
     "name": "score_kyron",
     "group": "target_sw",
     "repo": "https://github.com/eclipse-score/kyron.git",
     "owner_repo": "eclipse-score/kyron",
-    "hash": "cc72f599cc0c04a4e80c12a204f57e59a48d284a",
+    "hash": "394b232a8db7fb77db0ff16e9c26ec31c7759efd",
     "version": null,
     "branch": "main",
-    "current_hash": "cc72f599cc0c04a4e80c12a204f57e59a48d284a",
-    "behind_by": 0,
-    "compare_status": "identical"
+    "current_hash": "90fb90258f49f17a504d41262634d43608f28ccc",
+    "behind_by": 5,
+    "compare_status": "ahead"
   },
   {
-    "name": "score_lifecycle_health",
+    "name": "score_lifecycle",
     "group": "target_sw",
     "repo": "https://github.com/eclipse-score/lifecycle.git",
     "owner_repo": "eclipse-score/lifecycle",
-    "hash": "654ac348e1cb9327e5c8c4d84fd0028ad3ef2714",
+    "hash": "85da2168328d17a3cf53791ebf93534e5ed921fc",
     "version": null,
     "branch": "main",
-    "current_hash": "92b7ffeeeb36c598f3f3a64a72626b397e87e3db",
+    "current_hash": "ee0913a6448a412b13d77e13952cde12091bbf0d",
     "behind_by": 13,
     "compare_status": "ahead"
   },
@@ -366,35 +546,47 @@
     "group": "target_sw",
     "repo": "https://github.com/eclipse-score/logging.git",
     "owner_repo": "eclipse-score/logging",
-    "hash": "6282f3a2ec6b1eeeab87c8e9a4435c586bcf9973",
+    "hash": "c8e85fd862d3cd281d263a87b3dcc3d59f8fa1a5",
     "version": null,
     "branch": "main",
-    "current_hash": "f6e8323086134e01ead5736f813aa8c669a627ee",
-    "behind_by": 1,
-    "compare_status": "diverged"
+    "current_hash": "236ae6142efc5f1a2bc34b17a0dc331c5b46f002",
+    "behind_by": 5,
+    "compare_status": "ahead"
   },
   {
     "name": "score_time",
     "group": "target_sw",
     "repo": "https://github.com/eclipse-score/time.git",
     "owner_repo": "eclipse-score/time",
-    "hash": "414d4ce4d984e461db8153c95eceb9d5a2020f57",
+    "hash": "310c9b63bc21fdc85df840fb8ee400a610667038",
     "version": null,
     "branch": "main",
-    "current_hash": "8c42d34698535dabeaa4782d5ec123256151fb30",
+    "current_hash": "6dc811ecbc20e0253f7090c096182294dcb6974d",
     "behind_by": 5,
     "compare_status": "ahead"
+  },
+  {
+    "name": "score_config_management",
+    "group": "target_sw",
+    "repo": "https://github.com/eclipse-score/config_management.git",
+    "owner_repo": "eclipse-score/config_management",
+    "hash": "e0489b190ed6d2fa183b9a8063e2dba4f6378505",
+    "version": null,
+    "branch": "main",
+    "current_hash": "e0489b190ed6d2fa183b9a8063e2dba4f6378505",
+    "behind_by": 0,
+    "compare_status": "identical"
   },
   {
     "name": "score_crates",
     "group": "tooling",
     "repo": "https://github.com/eclipse-score/score-crates.git",
     "owner_repo": "eclipse-score/score-crates",
-    "hash": "a5f4f5765acc83f9c23b0b12860e130b9ebef3a7",
+    "hash": "4656dda8f04a3d88c8089f63111195840cfbd9e3",
     "version": null,
     "branch": "main",
-    "current_hash": "1f2ee5cd418c69c22093ba967c0c80bed1b595c5",
-    "behind_by": 50,
+    "current_hash": "6505e7d25ce3fec1638f4a0b9ab00caeb4fb9014",
+    "behind_by": 3,
     "compare_status": "ahead"
   },
   {
@@ -402,11 +594,11 @@
     "group": "tooling",
     "repo": "https://github.com/eclipse-score/itf.git",
     "owner_repo": "eclipse-score/itf",
-    "hash": "bf5294d7618e361c224edbd754060cee810285eb",
+    "hash": "802e0186d373e0d9d67c1c9ccb1ea08952c7ad06",
     "version": null,
     "branch": "main",
-    "current_hash": "802e0186d373e0d9d67c1c9ccb1ea08952c7ad06",
-    "behind_by": 52,
+    "current_hash": "38ae9a3dd98ccc7434e1f8b57ca4a3d2bac82e2f",
+    "behind_by": 26,
     "compare_status": "ahead"
   },
   {
@@ -414,11 +606,11 @@
     "group": "tooling",
     "repo": "https://github.com/eclipse-score/tooling.git",
     "owner_repo": "eclipse-score/tooling",
-    "hash": "7099e272c3f6114bad17736debd54139601aedd4",
+    "hash": "4736b5655f3a73dd353da1bdbeced5febd669664",
     "version": null,
     "branch": "main",
-    "current_hash": "c82be4d499a5a5ec024602329e9733714657f500",
-    "behind_by": 36,
+    "current_hash": "650e2e0db1f9df937175294dc7e8662a5fa64825",
+    "behind_by": 32,
     "compare_status": "ahead"
   },
   {
@@ -426,24 +618,24 @@
     "group": "tooling",
     "repo": "https://github.com/eclipse-score/score.git",
     "owner_repo": "eclipse-score/score",
-    "hash": "24ec6f276cd37755b5dae7f2345913628d56831f",
+    "hash": "6d65a262c2329328cb9cbdd276bb143b417c54a4",
     "version": null,
     "branch": "main",
-    "current_hash": "c97388c6da1f5b3233d4b73bffa196ff75e801cd",
-    "behind_by": 10,
-    "compare_status": "diverged"
+    "current_hash": "be2b5495f60b1cd329cda51e38dbfd45d0d415d9",
+    "behind_by": 20,
+    "compare_status": "ahead"
   },
   {
     "name": "score_bazel_platforms",
     "group": "tooling",
     "repo": "https://github.com/eclipse-score/bazel_platforms.git",
     "owner_repo": "eclipse-score/bazel_platforms",
-    "hash": "82b6df6ce93fb2960c52d992939fc6c3cf0e1f0f",
+    "hash": "607672cdf2f05f21af7113dab0849726dd59bf86",
     "version": null,
     "branch": "main",
-    "current_hash": "82b6df6ce93fb2960c52d992939fc6c3cf0e1f0f",
-    "behind_by": 0,
-    "compare_status": "identical"
+    "current_hash": "31a75c78f3a812ee277fe00a0e2e4db28915a8e7",
+    "behind_by": 1,
+    "compare_status": "ahead"
   },
   {
     "name": "score_test_scenarios",
@@ -453,37 +645,50 @@
     "hash": "fec712d490ff5d46fae91332bafac4777b300026",
     "version": null,
     "branch": "main",
-    "current_hash": "fec712d490ff5d46fae91332bafac4777b300026",
-    "behind_by": 0,
-    "compare_status": "identical"
+    "current_hash": "c16400a3f7c71ca26b67965c5e7469560b6de496",
+    "behind_by": 2,
+    "compare_status": "ahead"
   },
   {
     "name": "score_docs_as_code",
     "group": "tooling",
     "repo": "https://github.com/eclipse-score/docs-as-code.git",
     "owner_repo": "eclipse-score/docs-as-code",
-    "hash": "f1f20f0579ab5e63513561db0ab055cbec46c987",
+    "hash": "a7edbc55c5b4ea35e9ef0c7554f961bc583021a4",
     "version": null,
     "branch": "main",
-    "current_hash": "a0a70264f3b379a04d2e137d0038e2257553e67f",
-    "behind_by": 5,
-    "compare_status": "diverged"
+    "current_hash": "c8f12fdd8f9d2a93ff222838ccb277997434e590",
+    "behind_by": 14,
+    "compare_status": "ahead"
   },
   {
-    "name": "score_process",
+    "name": "score_process_description",
     "group": "tooling",
     "repo": "https://github.com/eclipse-score/process_description.git",
     "owner_repo": "eclipse-score/process_description",
-    "hash": "8df530cab5efcb40e9f835ba6e9b61ae2f0175c7",
+    "hash": "98d1d5f42dad412a09a888ea25e59c62fa6371ce",
     "version": null,
     "branch": "main",
-    "current_hash": "e51b368caf277d7ab06f15b6c696df8b0b4a521d",
-    "behind_by": 11,
+    "current_hash": "531b538c89849af3807cfaf77a96a49a3225818a",
+    "behind_by": 7,
+    "compare_status": "ahead"
+  },
+  {
+    "name": "score_bazel_cpp_toolchains",
+    "group": "tooling",
+    "repo": "https://github.com/eclipse-score/bazel_cpp_toolchains.git",
+    "owner_repo": "eclipse-score/bazel_cpp_toolchains",
+    "hash": "bd12c5344053f842fae4623dada5716dfb43e61d",
+    "version": null,
+    "branch": "main",
+    "current_hash": "c8d449350aff337503a6f5bf5aeee54a04ec9aa5",
+    "behind_by": 7,
     "compare_status": "ahead"
   }
 ];
+    const SBOM_PACKAGES = [];
 
-    // ── Token storage ──────────────────────────────────────────────────────
+    // ── Token storage (unchanged) ───────────────────────────────────────
     function getToken()   { return localStorage.getItem('gh_token') || ''; }
     function setToken(t)  { localStorage.setItem('gh_token', t); }
     function clearToken() { localStorage.removeItem('gh_token'); }
@@ -771,6 +976,47 @@
     document.getElementById('refresh-btn').addEventListener('click', () => render(false));
     renderAuthBar();
     render(true);   // use cache on initial page load
+
+    // ── SBOM table rendering (optional) ────────────────────────────────────
+    const sbomData = typeof window.SBOM_DATA !== 'undefined' ? window.SBOM_DATA : null;
+
+    function renderSBOMTable() {
+      if (!sbomData || !Array.isArray(sbomData.modules)) return;
+
+      const container = document.getElementById('sbom-section');
+      if (!container) return;
+
+      // Show section
+      container.style.display = 'block';
+
+      const tableWrap = document.getElementById('sbom-table-wrap');
+      const tbody = document.getElementById('sbom-tbody');
+
+      if (!tableWrap || !tbody) return;
+      tableWrap.classList.add('visible');
+
+      // Build rows
+      let html = '';
+      for (const m of sbomData.modules) {
+        const name = esc(m.name);
+        const version = esc(m.version || '');
+        const provider = esc(m.provider || '');
+        const licenseShort = esc(m.license_short || '');
+        const depsCount = m.deps_count ?? '-';
+
+        html += `<tr>
+          <td>${name}</td>
+          <td class="mono">${version}</td>
+          <td>${provider}</td>
+          <td>${licenseShort}</td>
+          <td class="num">${depsCount}</td>
+        </tr>`;
+      }
+
+      tbody.innerHTML = html;
+    }
+
+    renderSBOMTable();
   </script>
 </body>
 </html>
