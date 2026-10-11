@@ -1,0 +1,57 @@
+' Copyright (c) 2026 Qorix
+' SPDX-License-Identifier: Apache-2.0
+'
+' Runtime sequence of the module, from load to the worker loop. Checked against src/qnx/iosock_module.c.
+' Render: plantuml -tsvg -o diagrams runtime_sequence.puml   (from qnx_iosock_dlt/doc, or the PlantUML extension of the editor)
+
+@startuml runtime_sequence
+title Runtime sequence of the io-sock DLT module
+
+participant "io-sock" as Io
+participant "iosock_module.c" as Mod
+participant "worker thread" as W
+participant "shared-memory ring" as Ring
+participant "dlt_c_api / Pipeline" as Core
+participant "udp transport" as Udp
+participant "Network stack" as Net
+participant "stats (sysctl)" as Stats
+
+Io -> Mod : MOD_LOAD
+Mod -> W : kthread_add()
+Mod --> Io : 0 (never blocks)
+
+alt ring input (INPUT=ring)
+  W -> Ring : dlt_shm_map_create(): shm_unlink, shm_open,\nftruncate, mmap
+  W -> Core : dlt_ring_format()
+end
+
+W -> Udp : dlt_udp_open() -> socreate(), [sobind()]
+
+alt synthetic input (default)
+  W -> Core : dlt_session_start(config, ops)
+else ring input
+  W -> Core : dlt_ring_start(), dlt_ring_set_batching()
+end
+W -> Stats : publish state RUNNING
+
+loop until stop is requested (synthetic: or all records are sent)
+  W -> Core : dlt_session_step() or dlt_ring_step(32)
+  Core -> Core : per record TryRead(), Format(), assemble datagram
+  Core -> Udp : send(datagram)
+  Udp -> Net : m_getcl(), m_copyback(), sosend()
+  W -> Stats : publish counters
+  W -> W : pause(): synthetic after every step (DLT_PERIOD_MS),\nring only when the round found no record (DLT_POLL_MS)
+end
+
+W -> Stats : publish state FINISHED
+W -> Udp : dlt_udp_close() -> soclose()
+W -> W : kthread_exit()
+
+note over Io, Mod
+  io-sock answers "Not supported" for umount of a module,
+  so the MOD_UNLOAD handler below has never been executed.
+end note
+
+Io -> Mod : MOD_UNLOAD
+Mod -> W : g_stop = 1, wait up to 5 s\n(EBUSY if the worker still runs)
+@enduml

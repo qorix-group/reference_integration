@@ -1,0 +1,8 @@
+{
+    "appId": "BNCH",
+    "appDesc": "mw::log benchmark, DLT ring recorder",
+    "logMode": "kCustom",
+    "logLevel": "kInfo",
+    "numberOfSlots": 32,
+    "slotSizeBytes": 512
+}

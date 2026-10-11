@@ -1,0 +1,158 @@
+' Copyright (c) 2026 Qorix
+' SPDX-License-Identifier: Apache-2.0
+'
+' The qnx_iosock_dlt PoC drawn like dlt_plugin.puml of DR-002 (eclipse-score/logging,
+' docs/features/logging/architecture/_assets/dlt_plugin.puml), so both can be compared element by element.
+' Same packages, component names, arrows and layout settings; the colour tells how far the PoC covers each element:
+'   green   implemented and verified on QEMU x86_64
+'   yellow  partly covered or replaced by a PoC stand-in (the stand-in is named in the label)
+'   red     not in the PoC
+'   grey    exists, but is not PoC code
+' The userspace sendmsg forwarder used for the transport A/B is a measurement tool and is not drawn (see class_diagram.puml page 6).
+' Render: plantuml qnx_iosock_dlt/doc/poc_architecture.puml   (or the PlantUML extension of the editor)
+
+@startuml poc_architecture
+title qnx_iosock_dlt PoC against the DR-002 target:\nDLT Daemon functionality as a Plugin / Loadable Shared Module (a second dedicated Network Stack instance)
+
+skinparam componentStyle rectangle
+skinparam nodesep 40
+skinparam ranksep 60
+skinparam linetype ortho
+
+!$done = "#C8E6C9"
+!$part = "#FFF4D6"
+!$none = "#F8D7DA"
+!$ext = "#E0E0E0"
+
+interface "mw::diag" as mwdiag
+component "DLT Diagnostics\nComponent\n(not in PoC)" as dltdiag <<QM>> $none
+dltdiag --> mwdiag
+
+package "client" <<ASIL>> {
+  component "mw::log\n(kCustom recorder:\nRingRecorder + ShmRingWriter)" as mwlog <<FFI>> $part
+  component "GTL\n(not in PoC, not in known_good;\nthe ring below stands in)" as gtl <<FFI>> $none
+
+  mwlog -[hidden]r-> gtl
+}
+
+note bottom of mwlog
+  Unmodified application; only the backend is
+  switched by build flags and patch 003.
+  The recorder serialises with DLTFormat::Log and
+  writes the record fields into the ring.
+  kCustom and kRemote exclude each other.
+end note
+
+file "Client\nConfiguration\n(build flags, patch 003)" as clientconfig $part
+clientconfig -d-> mwlog
+
+interface " " as shmring
+interface " " as shmctrl
+interface " " as ctrlchannel
+interface " " as sysctlif
+
+note top of shmring #Wheat : shm /score_dlt_ring\n(slots: fields + payload)
+note bottom of shmctrl #Wheat : shm\n(ring header: head, tail)
+note top of ctrlchannel #Wheat : DLT QNX\nControl Channel\n(not in PoC)
+note top of sysctlif #Wheat : sysctl\nqnx.module.score_dlt.*
+
+mwlog -r-> shmring : W
+mwlog -r-> shmctrl : W
+dltdiag --> ctrlchannel
+
+package "Network Stack (log_and_trace instance)" <<QM>> as networkstackinstance {
+  package "DLT Plugin (mods-score-dlt.so)" {
+    component "ShmRingRecordSource\n(replaces GTL Backend)" as gtlbackend $part
+    component "Core\n(iosock_module.c: worker thread,\nMOD_LOAD, dlt_c_api)" as core $part
+    component "Statistics\nModule\n(qnx_module_stats: counters)" as stats $part
+    component "Pipeline\n(replaces DLT Router:\nno routing, no filtering)" as router $part
+    interface "DLT Wire Format\n(compile-time seam)\nnot in PoC" as wireformat
+    component "DLT File\nWriter\n(not in PoC)" as filewriter $none
+    component "DLT Network\nWriter\n(CTransport)" as netwriter $done
+    component "Network Stack\nNative APIs\n(qnx_native_udp_transport:\nsocreate, m_getcl,\nm_copyback, sosend)" as fbsdapi $done
+    component "gPTP\nLogger Time\n(not in PoC)" as gptp <<optional>> $none
+  }
+
+  component "UDP/IP\n(QNX-owned: route, ARP,\nmulticast, no socket options)" as udpip $ext
+  component "devs-network-driver.so\n(devs-vtnet_pci.so on QEMU)" as driver $ext
+}
+
+package "DLT Wire Format Implementations" as wireformatpkg {
+  component "DLTv2\n(closed-source, out of scope)" as dltv2wire <<external>> $ext
+  component "DLTv1\n(DltWireFormatter: re-implemented,\nnot shared with dlt_headers.h)" as dltv1wire $part
+}
+
+package "mw::time" as mwtime <<optional>> {
+  component "shm\n(logger time)\n(not in PoC)" as shmloggertime <<optional>> $none
+}
+
+dltv2wire -[hidden]r-> dltv1wire
+
+shmring -r-> gtlbackend : R/O
+shmctrl <-r-> core : R/W
+ctrlchannel -u-> core
+
+gtlbackend -d-> core
+core -d-> router
+core -l-> stats
+stats -u-> sysctlif
+router -d-> filewriter
+router -d-> netwriter
+
+wireformat -u-> filewriter
+wireformat -u-> netwriter
+
+dltv1wire ..> netwriter : used directly\n(no seam)
+
+note left of wireformat
+  Target: compile-time selection
+  between DLTv1 and DLTv2.
+  PoC: the Pipeline calls the concrete
+  DltWireFormatter; DLTv1 only.
+end note
+
+filewriter -d-> fbsdapi
+netwriter -d-> fbsdapi
+fbsdapi -d-> udpip : sosend\n(in-stack, no IPC)
+udpip -d-> driver
+
+file "Global\nConfiguration\n(compile-time: DST_ADDR, port,\nring name, ECU id IOS1)" as globalconfig $part
+core <-d- globalconfig
+
+file "Router\nConfiguration\n(not in PoC)" as routerconfig $none
+routerconfig -d-> router
+
+database "filesystem\n(devb-*, fs-qnx6.so)\n(not in PoC)" as fsdb $none
+filewriter -d-> fsdb
+
+fbsdapi <-r- gptp
+driver <-r- gptp
+gptp <-r- mwtime
+mwlog -r-> shmloggertime
+
+note bottom of fbsdapi
+  Copies in the PoC: record into slot,
+  slot into ring, header + payload into frame_,
+  frame_ into the mbuf cluster. Not zero-copy.
+end note
+
+legend bottom
+  |= Colour |= Meaning |
+  |<#C8E6C9> | implemented, verified on QEMU x86_64 |
+  |<#FFF4D6> | partly covered or replaced by a PoC stand-in |
+  |<#F8D7DA> | not in the PoC |
+  |<#E0E0E0> | exists, not PoC code (QNX stack, driver, closed-source) |
+  |= Acronym |= Meaning |
+  | DLT | Diagnostics Log and Trace |
+  | GTL | Generic Trace Library |
+  | QM | Quality Managed (non-ASIL) |
+  | ASIL | Automotive Safety Integrity Level |
+  | FFI | Freedom From Interference |
+  | shm | Shared Memory |
+  | R/O | Read-Only |
+  | R/W | Read/Write |
+  | W | Write |
+  | gPTP | generalized Precision Time Protocol |
+end legend
+
+@enduml

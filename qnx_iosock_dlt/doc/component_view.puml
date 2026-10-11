@@ -1,0 +1,59 @@
+' Copyright (c) 2026 Qorix
+' SPDX-License-Identifier: Apache-2.0
+'
+' Component view of the PoC: who talks to whom. Checked against src/qnx/*.c, src/core/*.cpp and include/dlt/*.h.
+' Render: plantuml -tsvg -o diagrams component_view.puml   (from qnx_iosock_dlt/doc, or the PlantUML extension of the editor)
+
+@startuml component_view
+title Component view of the io-sock DLT module
+
+skinparam componentStyle rectangle
+
+package "Application side (unchanged)" {
+  [mw::log\n(kCustom recorder:\nRingRecorder + ShmRingWriter)] as MwLog
+  [GTL\n(not in the known-good baseline)] as Gtl
+}
+
+database "Shared-memory ring\n/dev/shmem/score_dlt_ring" as Ring
+
+node "io-sock process (default or dedicated instance)" {
+  package "mods-score-dlt.so" {
+    [iosock_module.c\nlifecycle, worker thread] as Module
+    [qnx_module_stats.c\nsysctl health + counters] as Stats
+    [qnx_shm_map.c\ncreates and maps the ring\n(ring input only)] as ShmMap
+    [qnx_native_udp_transport.c\nsocreate / sosend / mbuf] as Transport
+    [dlt_c_api\nC boundary] as CApi
+
+    package "Portable core (freestanding C++)" {
+      [SyntheticRecordSource (default)\nShmRingRecordSource (INPUT=ring)\nlater: GtlRecordSource] as Source
+      [Pipeline<Source, Transport>] as Pipe
+      [DltWireFormatter] as Fmt
+    }
+  }
+  [BSD socket layer, UDP, IP] as Stack
+}
+
+[NIC driver (devs-*.so)] as Nic
+
+MwLog --> Ring : writes records
+MwLog ..> Gtl : serialized records\n(target, not built)
+Gtl ..> Source : future seam
+
+Module --> CApi
+Module --> Stats
+Module --> ShmMap
+Module --> Transport
+ShmMap --> Ring : creates, maps
+Source --> Ring : reads in place
+CApi --> Pipe
+Pipe --> Source : TryRead()
+Pipe --> Fmt : Format()
+Pipe ..> Transport : Send() via C ops
+Transport --> Stack : sosend()
+Stack --> Nic
+
+note bottom of Source
+  The input kind is chosen at build time:
+  synthetic stream (default) or ring (INPUT=ring).
+end note
+@enduml

@@ -1,0 +1,10 @@
+# Copyright (c) 2026 Qorix
+# SPDX-License-Identifier: Apache-2.0
+out/
+qnx_module/*.o
+qnx_module/*.a
+qnx_module/*.dep
+qnx_module/*.pinfo
+qnx_module/*.so
+qnx_module/*.use
+tools/__pycache__/

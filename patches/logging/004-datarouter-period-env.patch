@@ -1,0 +1,80 @@
+diff --git a/score/datarouter/src/daemon/socketserver.cpp b/score/datarouter/src/daemon/socketserver.cpp
+--- a/score/datarouter/src/daemon/socketserver.cpp
++++ b/score/datarouter/src/daemon/socketserver.cpp
+@@ -35,6 +35,7 @@
+ #include "data_router_cfg.h"
+ 
+ #include <score/math.hpp>
++#include <cstdlib>
+ #include <functional>
+ #include <iostream>
+ #include <optional>
+@@ -57,6 +58,15 @@
+ constexpr std::uint32_t kDltFlushPeriodUs{100000U};
+ constexpr std::uint32_t kThrottleTimeUs{100000U};
+ 
++// Benchmark hook: DATAROUTER_PERIOD_MS (1..100) shortens the loop, polling and DLT flush period, the default stays 100 ms.
++std::uint32_t LoopPeriodUs() noexcept
++{
++    const char* const value = std::getenv("DATAROUTER_PERIOD_MS");
++    const unsigned long milliseconds = (value != nullptr) ? std::strtoul(value, nullptr, 10) : 0UL;
++    return ((milliseconds >= 1UL) && (milliseconds <= 100UL)) ? static_cast<std::uint32_t>(milliseconds * 1000UL)
++                                                              : kThrottleTimeUs;
++}
++
+ }  // namespace
+ 
+ void SocketServer::SetThreadName() noexcept
+@@ -329,19 +339,21 @@
+                                 score::mw::log::Logger& stats_logger)
+ {
+     uint16_t count = 0U;
+-    constexpr std::uint32_t kStatisticsFreqDivider = kStatisticsLogPeriodUs / kThrottleTimeUs;
+-    constexpr std::uint32_t kDltFreqDivider = kDltFlushPeriodUs / kThrottleTimeUs;
++    const std::uint32_t throttle_time_us = LoopPeriodUs();
++    const std::uint32_t statistics_freq_divider = kStatisticsLogPeriodUs / throttle_time_us;
++    // The DLT channels are flushed with every loop iteration when the loop period is shortened.
++    const std::uint32_t dlt_freq_divider = (throttle_time_us < kDltFlushPeriodUs) ? 1U : (kDltFlushPeriodUs / throttle_time_us);
+ 
+     while (!exit_requested.load())
+     {
+-        usleep(kThrottleTimeUs);
++        usleep(throttle_time_us);
+ 
+-        if ((count % kStatisticsFreqDivider) == 0U)
++        if ((count % statistics_freq_divider) == 0U)
+         {
+-            router.ShowSourceStatistics(static_cast<uint16_t>(count / kStatisticsFreqDivider));
+-            dlt_server.ShowChannelStatistics(static_cast<uint16_t>(count / kStatisticsFreqDivider), stats_logger);
++            router.ShowSourceStatistics(static_cast<uint16_t>(count / statistics_freq_divider));
++            dlt_server.ShowChannelStatistics(static_cast<uint16_t>(count / statistics_freq_divider), stats_logger);
+         }
+-        if ((count % kDltFreqDivider) == 0U)
++        if ((count % dlt_freq_divider) == 0U)
+         {
+             dlt_server.Flush();
+         }
+diff --git a/score/datarouter/src/daemon/message_passing_server.cpp b/score/datarouter/src/daemon/message_passing_server.cpp
+--- a/score/datarouter/src/daemon/message_passing_server.cpp
++++ b/score/datarouter/src/daemon/message_passing_server.cpp
+@@ -21,6 +21,7 @@
+ 
+ #include <algorithm>
+ #include <array>
++#include <cstdlib>
+ #include <cstring>
+ #include <iostream>
+ #include <sstream>
+@@ -221,7 +222,11 @@
+ 
+ void MessagePassingServer::RunWorkerThread()
+ {
+-    constexpr std::int32_t kTimeoutInMs = 100;
++    // Benchmark hook: DATAROUTER_PERIOD_MS (1..100) shortens the polling period of the sources, default 100 ms.
++    const char* const period_env = std::getenv("DATAROUTER_PERIOD_MS");
++    const long period_ms = (period_env != nullptr) ? std::strtol(period_env, nullptr, 10) : 0L;
++    const std::int32_t kTimeoutInMs =
++        ((period_ms >= 1L) && (period_ms <= 100L)) ? static_cast<std::int32_t>(period_ms) : 100;
+     TimestampT t1 = TimestampT::clock::now() + std::chrono::milliseconds(kTimeoutInMs);
+ 
+     std::unique_lock<std::mutex> lock(mutex_);

@@ -1,0 +1,33 @@
+' Copyright (c) 2026 Qorix
+' SPDX-License-Identifier: Apache-2.0
+'
+' Who touches the shared-memory ring and when. Checked against src/qnx/qnx_shm_map.c, src/qnx/iosock_module.c,
+' include/dlt/pipeline.h and include/dlt/shm_ring.h.
+' Render: plantuml -tsvg -o diagrams ring_access.puml   (from qnx_iosock_dlt/doc, or the PlantUML extension of the editor)
+
+@startuml ring_access
+title Access to the shared-memory ring
+
+participant "producer process" as P
+participant "shared memory\n/dev/shmem/score_dlt_ring" as R
+participant "worker thread (io-sock)" as W
+participant "Network stack" as Net
+
+W -> R : shm_unlink (stale object), shm_open, ftruncate, mmap
+W -> R : format the ring, magic number last
+P -> R : shm_open + mmap, validate magic, version, geometry
+
+loop per log record
+  P -> R : claim slot (CAS), fill metadata + payload, commit (release)
+end
+
+loop worker rounds
+  loop up to 32 records
+    W -> R : peek oldest committed slot (acquire)
+    W -> W : format DLT message into the datagram (payload read in place)
+    W -> R : release the slot (on the next read)
+  end
+  W -> Net : sosend() when the datagram is full,\nand at the end of every round
+  W -> W : pause(DLT_POLL_MS) only if the round found no record
+end
+@enduml

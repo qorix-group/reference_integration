@@ -80,6 +80,8 @@ git_override(
     patches = [
         "//patches/logging:001-migrate-baselibs-targets.patch",
         "//patches/logging:002-undev-component-test-deps.patch",
+        "//patches/logging:003-expose-dlt-content-formatting.patch",
+        "//patches/logging:004-datarouter-period-env.patch",
     ],
     remote = "https://github.com/eclipse-score/logging.git",
 )

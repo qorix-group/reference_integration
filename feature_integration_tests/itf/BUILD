@@ -10,6 +10,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
+load("@rules_python//python:py_test.bzl", "py_test")
 load("@score_itf//:defs.bzl", "py_itf_test")
 
 config_setting(
@@ -33,6 +34,12 @@ config_setting(
 filegroup(
     name = "all_tests",
     srcs = [
+        "test_iosock_dlt.py",
+        "test_iosock_dlt_bench.py",
+        "test_iosock_dlt_forwarder.py",
+        "test_iosock_dlt_mwlog.py",
+        "test_iosock_dlt_ring.py",
+        "test_iosock_dlt_second_stack.py",
         "test_remote_logging.py",
         "test_showcases.py",
         "test_ssh.py",
@@ -68,8 +75,14 @@ py_itf_test(
             "//feature_integration_tests/configs:dlt_config_qnx_x86_64.json",
             "//feature_integration_tests/configs:qemu_bridge_config.json",
             "//images/qnx_x86_64:image",
+            "//qnx_iosock_dlt/mwlog_ring:mwlog_bench_app",
+            "//qnx_iosock_dlt/mwlog_ring:mwlog_bench_remote.json",
+            "//qnx_iosock_dlt/mwlog_ring:mwlog_bench_remote_large.json",
+            "//qnx_iosock_dlt/mwlog_ring:mwlog_bench_ring.json",
+            "//qnx_iosock_dlt/mwlog_ring:mwlog_ring_app",
+            "//qnx_iosock_dlt/mwlog_ring:mwlog_ring_config.json",
         ],
-    }) + ["conftest.py"],
+    }) + ["conftest.py", "bench_metrics.py", "forwarder_target.py"],
     plugins = select(
         {
             ":config_linux_x86_64": [
@@ -86,6 +99,18 @@ py_itf_test(
     tags = [
         "manual",
     ],
+)
+
+# Host-only unit tests of the benchmark statistics (CPU accounting, forwarder counters, tables); no target needed.
+py_test(
+    name = "bench_metrics_test",
+    size = "small",
+    srcs = [
+        "bench_metrics.py",
+        "test_bench_metrics.py",
+    ],
+    imports = ["."],
+    main = "test_bench_metrics.py",
 )
 
 # Backward compatible aliases for CI jobs - these should be removed once the CI jobs are updated to use the new target names

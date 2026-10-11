@@ -1,0 +1,8 @@
+{
+    "appId": "MWLG",
+    "appDesc": "mw::log ring recorder test",
+    "logMode": "kCustom",
+    "logLevel": "kInfo",
+    "numberOfSlots": 8,
+    "slotSizeBytes": 512
+}

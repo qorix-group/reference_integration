@@ -1,0 +1,14 @@
+diff --git a/score/mw/log/detail/common/BUILD b/score/mw/log/detail/common/BUILD
+--- a/score/mw/log/detail/common/BUILD
++++ b/score/mw/log/detail/common/BUILD
+@@ -76,9 +76,7 @@
+     features = COMPILER_WARNING_FEATURES,
+     tags = ["FFI"],
+     visibility = [
+-        "//score/mw/log/detail/data_router:__pkg__",
+-        "//score/mw/log/detail/dlt_trace:__pkg__",
+-        "//score/mw/log/detail/file_recorder:__pkg__",
++        "//visibility:public",
+     ],
+     deps = [
+         ":helper_functions",

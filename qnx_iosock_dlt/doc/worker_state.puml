@@ -1,0 +1,28 @@
+' Copyright (c) 2026 Qorix
+' SPDX-License-Identifier: Apache-2.0
+'
+' States of the worker thread as published in sysctl qnx.module.score_dlt.state.
+' Values: src/qnx/qnx_module_stats.h (DLT_STATE_*). Transitions: src/qnx/iosock_module.c.
+' Render: plantuml -tsvg -o diagrams worker_state.puml   (from qnx_iosock_dlt/doc, or the PlantUML extension of the editor)
+
+@startuml worker_state
+title Worker state (sysctl qnx.module.score_dlt.state)
+
+[*] --> IDLE : module loaded
+IDLE : 0
+RUNNING : 1
+FINISHED : 2
+FAILED : 3
+
+IDLE --> RUNNING : ring (ring input), socket and session are ready
+IDLE --> FAILED : ring, socket or session setup failed
+RUNNING --> FINISHED : stop requested, or (synthetic input)\nall records sent
+FINISHED --> [*]
+FAILED --> [*]
+
+note right of FINISHED
+  The ring variant only reaches FINISHED on a stop
+  request, which needs MOD_UNLOAD and is therefore
+  not reachable today: it stays in RUNNING.
+end note
+@enduml

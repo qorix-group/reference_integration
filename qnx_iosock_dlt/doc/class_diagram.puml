@@ -1,0 +1,607 @@
+' Copyright (c) 2026 Qorix
+' SPDX-License-Identifier: Apache-2.0
+'
+' Class diagrams of qnx_iosock_dlt, one page per @startuml block (each renders to its own image):
+'   1 overview            all parts and how they connect, no members
+'   2 core                formatter, pipeline, record sources, transport seam (namespace dlt)
+'   3 ring                shared-memory ring, its producers and its consumer, the mw::log feed
+'   4 boundary            the C API between the core and the module
+'   5 module              the io-sock module
+'   6 tools               userspace forwarder and host harnesses against the module
+' Render: plantuml qnx_iosock_dlt/doc/class_diagram.puml   (or the PlantUML extension of the editor)
+
+' =========================================================================================================
+@startuml qnx_iosock_dlt_1_overview
+title 1 Overview: parts of qnx_iosock_dlt
+
+left to right direction
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+skinparam class {
+  BackgroundColor<<C>> #FFF4D6
+  BackgroundColor<<external>> #E8E8E8
+  BackgroundColor<<concept>> #E3F0FF
+  BackgroundColor<<program>> #E6F5E6
+  BackgroundColor<<shared memory>> #F9E3F4
+}
+hide members
+
+package "Portable core (C++17, freestanding)" {
+  class DltWireFormatter
+  class "Pipeline<Source, Transport>" as Pipeline
+  interface RecordSource <<concept>>
+  interface Transport <<concept>>
+  class SyntheticRecordSource
+  class ShmRingRecordSource
+}
+
+package "C boundary" {
+  class dlt_c_api <<C>>
+  class CTransport
+}
+
+package "io-sock module (plain C)" {
+  class iosock_module <<C>>
+  class qnx_native_udp_transport <<C>>
+  class qnx_module_stats <<C>>
+  class qnx_shm_map <<C>>
+}
+
+class "io-sock stack" as IoSock <<external>>
+class "Shared-memory ring" as SharedRing <<shared memory>>
+
+package "mw::log feed" {
+  class RingRecorder
+  class ShmRingWriter
+}
+
+package "Userspace tools" {
+  class ring_forwarder <<program>>
+  class PosixUdpTransport
+  class ring_producer <<program>>
+}
+
+Pipeline o-- DltWireFormatter
+Pipeline o-- RecordSource
+Pipeline o-- Transport
+SyntheticRecordSource ..|> RecordSource
+ShmRingRecordSource ..|> RecordSource
+CTransport ..|> Transport
+PosixUdpTransport ..|> Transport
+
+dlt_c_api ..> Pipeline : drives
+dlt_c_api *-- CTransport
+iosock_module ..> dlt_c_api
+iosock_module ..> qnx_native_udp_transport
+iosock_module ..> qnx_module_stats
+iosock_module ..> qnx_shm_map
+qnx_native_udp_transport ..> IoSock : sosend (in-stack)
+qnx_shm_map ..> SharedRing : creates
+ShmRingRecordSource ..> SharedRing : drains
+
+RingRecorder *-- ShmRingWriter
+ShmRingWriter ..> SharedRing : writes
+ring_producer ..> SharedRing : writes
+
+ring_forwarder ..> Pipeline
+ring_forwarder ..> PosixUdpTransport
+ring_forwarder ..> SharedRing : creates, drains
+PosixUdpTransport ..> IoSock : sendmsg (socket IPC)
+@enduml
+
+' =========================================================================================================
+@startuml qnx_iosock_dlt_2_core
+title 2 Core: record source -> DLT formatter -> transport (namespace dlt)
+
+left to right direction
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam class {
+  BackgroundColor<<concept>> #E3F0FF
+}
+hide empty members
+
+enum LogLevel {
+  kFatal = 1
+  kError
+  kWarn
+  kInfo
+  kDebug
+  kVerbose = 6
+}
+
+class DltId <<struct>> {
+  +chars[4] : char
+}
+
+class LogRecordView <<struct>> {
+  +payload : const u8*
+  +payload_size : usize
+  +timestamp : u32  (0.1 ms)
+  +log_level : LogLevel
+  +num_of_args : u8
+  +app_id : DltId
+  +ctx_id : DltId
+}
+
+interface RecordSource <<concept>> {
+  +TryRead(out : LogRecordView&) : bool
+}
+
+interface Transport <<concept>> {
+  +Send(data : const u8*, size : usize) : bool
+}
+
+class SyntheticConfig <<struct>> {
+  +record_count : u32
+  +first_timestamp : u32
+  +timestamp_step : u32
+  +log_level : LogLevel
+  +app_id : DltId
+  +ctx_id : DltId
+}
+
+class SyntheticRecordSource {
+  -config_ : SyntheticConfig
+  -next_ : u32
+  -payload_[32] : u8
+  +TryRead(out : LogRecordView&) : bool
+  +produced() : u32
+  +remaining() : u32
+}
+
+class ShmRingRecordSource {
+  -ring_ : dlt_shm_ring
+  -holding_ : bool
+  -corrupt_ : u32
+  +Attach(mem : void*, size : usize) : bool
+  +TryRead(out : LogRecordView&) : bool
+  +drops_full() : u32
+  +drops_oversize() : u32
+  +corrupt() : u32
+}
+
+enum FormatStatus {
+  kOk
+  kInvalidArgument
+  kBufferTooSmall
+  kPayloadTooLarge
+}
+
+class FormatResult <<struct>> {
+  +status : FormatStatus
+  +size : usize
+}
+
+class DltWireFormatter {
+  -ecu_id_ : DltId
+  -message_counter_ : u8
+  +DltWireFormatter(ecu_id : DltId)
+  +Format(record, out : u8*, capacity : usize) : FormatResult
+  +message_counter() : u8
+}
+
+class TransportStats <<struct>> {
+  +records_received : u64
+  +packets_sent : u64
+  +bytes_sent : u64
+  +packets_dropped : u64
+  +send_failures : u64
+  +datagrams_sent : u64
+}
+
+class "Pipeline<Source, Transport>" as Pipeline {
+  -source_ : Source&
+  -transport_ : Transport&
+  -formatter_ : DltWireFormatter&
+  -stats_ : TransportStats
+  -frame_[1472] : u8
+  -batch_limit_ : usize
+  +Pump(max_records : usize) : usize
+  +SetBatchLimit(batch_limit : usize)
+  +stats() : const TransportStats&
+  +ResetStats()
+}
+
+LogRecordView *-- DltId
+LogRecordView ..> LogLevel
+SyntheticConfig ..> LogLevel
+SyntheticRecordSource *-- SyntheticConfig
+SyntheticRecordSource ..|> RecordSource
+ShmRingRecordSource ..|> RecordSource
+SyntheticRecordSource ..> LogRecordView : fills
+ShmRingRecordSource ..> LogRecordView : fills
+DltWireFormatter *-- DltId
+DltWireFormatter ..> LogRecordView : reads
+DltWireFormatter ..> FormatResult : returns
+FormatResult *-- FormatStatus
+Pipeline o-- RecordSource : Source
+Pipeline o-- Transport : Transport
+Pipeline o-- DltWireFormatter
+Pipeline *-- TransportStats
+
+note right of RecordSource
+  Seams are template parameters, not virtual
+  interfaces (no __cxa_pure_virtual in the module).
+end note
+
+note bottom of Pipeline
+  Batching: SetBatchLimit(0 or up to 1472 bytes);
+  a partial datagram is flushed at the end of every Pump().
+end note
+@enduml
+
+' =========================================================================================================
+@startuml qnx_iosock_dlt_3_ring
+title 3 Ring: producers write, the consumer drains (shared memory, many producers and one consumer)
+
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam class {
+  BackgroundColor<<C header>> #FFF4D6
+  BackgroundColor<<C struct>> #FFF4D6
+  BackgroundColor<<external>> #E8E8E8
+  BackgroundColor<<program>> #E6F5E6
+  BackgroundColor<<shared memory>> #F9E3F4
+}
+hide empty members
+
+class "Shared memory\n/dev/shmem/<ring name>" as SharedRing <<shared memory>> {
+  control block (dlt_shm_ring_header)
+  slot_count x dlt_shm_ring_slot
+  slot_count x payload area
+}
+
+class "shm_ring.h\n(valid C99 and C++17)" as ShmRingApi <<C header>> {
+  {static} +dlt_shm_ring_required_size(slots, cap) : u32
+  {static} +dlt_shm_ring_init(mem, size, slots, cap) : int
+  {static} +dlt_shm_ring_attach(ring, mem, size) : int
+  {static} +dlt_shm_ring_write(ring, level, app, ctx, num_args, ts_ns, payload, len) : int
+  {static} +dlt_shm_ring_peek(ring, slot, payload) : int
+  {static} +dlt_shm_ring_release(ring)
+}
+
+class dlt_shm_ring_header <<C struct>> {
+  magic, version, slot_count
+  slot_payload_cap, meta_offset, payload_offset
+  enqueue_pos, drops_full, drops_oversize
+  dequeue_pos
+}
+
+class dlt_shm_ring_slot <<C struct>> {
+  sequence : u32
+  payload_len : u16
+  level : u8
+  num_args : u8
+  app_id[4], ctx_id[4]
+  timestamp_ns : u64
+}
+
+class dlt_shm_ring <<C struct>> {
+  header : dlt_shm_ring_header*
+  slots : dlt_shm_ring_slot*
+  payload : u8*
+  mask : u32
+  slot_payload_cap : u32
+}
+
+class ShmRingRecordSource <<consumer>> {
+  -ring_ : dlt_shm_ring
+  +Attach(mem, size) : bool
+  +TryRead(out : LogRecordView&) : bool
+}
+
+class ShmRingWriter <<producer>> {
+  -ring_name_ : string
+  -ring_ : dlt_shm_ring
+  -mapping_ : void*
+  -attached_ : atomic<bool>
+  +ShmRingWriter(ring_name : string)
+  +Write(level, app_id, ctx_id, num_of_args, payload, size) : Result
+  -EnsureAttached() : bool
+}
+
+class "RingRecorder" as RingRecorder <<producer>> {
+  -config_ : Configuration
+  -slots_ : CircularAllocator<LogRecord>
+  -writer_ : unique_ptr<ShmRingWriter>
+  +StartRecord(context_id, log_level) : optional<SlotHandle>
+  +StopRecord(slot)
+  +Log(slot, value)  (22 overloads)
+  +IsLogEnabled(level, context) : bool
+}
+
+class RingRecorderFactory {
+  kDefaultRingName = "/score_dlt_ring"
+  kRingNameEnvironmentVariable = "DLT_RING_NAME"
+  +ResolveRingName() : string
+  +CreateConcreteLogRecorder(config, memory_resource)
+}
+
+class "score::mw::log::Recorder" as MwRecorder <<external>>
+class "score::mw::log::detail::\nLogRecorderFactory<RingRecorderFactory>" as MwFactory <<external>>
+
+class "ring_producer.c" as RingProducer <<program>> {
+  test producer (host and QNX)
+}
+
+dlt_shm_ring o-- dlt_shm_ring_header
+dlt_shm_ring o-- dlt_shm_ring_slot
+SharedRing *-- dlt_shm_ring_header
+SharedRing *-- dlt_shm_ring_slot : slot_count x
+ShmRingApi ..> dlt_shm_ring : operates on
+ShmRingApi ..> SharedRing : defines the layout
+
+ShmRingRecordSource *-- dlt_shm_ring
+ShmRingRecordSource ..> ShmRingApi : peek, release
+ShmRingRecordSource ..> SharedRing : drains
+ShmRingWriter *-- dlt_shm_ring
+ShmRingWriter ..> ShmRingApi : write
+ShmRingWriter ..> SharedRing : writes
+RingProducer ..> ShmRingApi : write
+RingProducer ..> SharedRing : writes
+
+RingRecorder --|> MwRecorder
+RingRecorder *-- ShmRingWriter
+RingRecorderFactory --|> MwFactory
+RingRecorderFactory ..> RingRecorder : creates
+
+note bottom of SharedRing
+  Created and formatted by the owner: the io-sock module
+  (/score_dlt_ring) or ring_forwarder (e.g. /score_dlt_ring_fwd).
+  Producers pick the ring with DLT_RING_NAME.
+end note
+@enduml
+
+' =========================================================================================================
+@startuml qnx_iosock_dlt_4_boundary
+title 4 Boundary: the C API between the core and the module (dlt_c_api.h, dlt_c_api.cpp)
+
+left to right direction
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam class {
+  BackgroundColor<<C module>> #FFF4D6
+  BackgroundColor<<C API>> #FFF4D6
+  BackgroundColor<<C struct>> #FFF4D6
+  BackgroundColor<<external>> #E8E8E8
+  BackgroundColor<<concept>> #E3F0FF
+  BackgroundColor<<shared memory>> #F9E3F4
+}
+hide empty members
+
+package "C boundary: dlt_c_api" as Boundary {
+  class dlt_transport_ops <<C struct>> {
+    ctx : void*
+    send : int (*)(ctx, data, size)
+  }
+
+  class dlt_config <<C struct>> {
+    record_count, first_timestamp, timestamp_step
+    log_level, ecu_id[4], app_id[4], ctx_id[4]
+  }
+
+  class dlt_stats <<C struct>> {
+    records_received, packets_sent, bytes_sent
+    packets_dropped, send_failures, datagrams_sent
+  }
+
+  class dlt_ring_info <<C struct>> {
+    slot_count, slot_payload_cap
+    drops_full, drops_oversize, corrupt
+  }
+
+  class "dlt_c_api" as CApi <<C API>> {
+    {static} +dlt_nanos_to_timestamp(nanos) : u32
+    {static} +dlt_session_start(config, ops) : int
+    {static} +dlt_session_step(stats) : int
+    {static} +dlt_ring_size_for(slots, cap) : size
+    {static} +dlt_ring_format(mem, size, slots, cap) : int
+    {static} +dlt_ring_start(mem, size, ecu_id, ops) : int
+    {static} +dlt_ring_set_batching(max_datagram_bytes)
+    {static} +dlt_ring_step(max_records, stats, ring_info) : int
+  }
+
+  class CTransport <<adapter>> {
+    -ops_ : dlt_transport_ops
+    +Bind(ops : const dlt_transport_ops&)
+    +Send(data : const u8*, size : usize) : bool
+  }
+
+  class "Static sessions\n(anonymous namespace)" as Sessions <<singleton>> {
+    synthetic: g_source, g_formatter, g_transport, g_pipeline
+    ring: g_ring_source, g_ring_formatter, g_ring_transport, g_ring_pipeline
+  }
+}
+
+class "Pipeline<Source, Transport>\n(see page 2)" as Pipeline
+interface Transport <<concept>>
+
+CTransport ..|> Transport
+CTransport *-- dlt_transport_ops
+Sessions *-- Pipeline : g_pipeline, g_ring_pipeline
+Sessions *-- CTransport
+CApi ..> Sessions : drives
+CApi ..> dlt_config
+CApi ..> dlt_stats
+CApi ..> dlt_ring_info
+
+note bottom of CTransport
+  Send() forwards to dlt_transport_ops.send:
+  in the module dlt_udp_send -> sosend() inside io-sock.
+end note
+@enduml
+
+' =========================================================================================================
+@startuml qnx_iosock_dlt_5_module
+title 5 Module: the io-sock module (mods-score-dlt, mods-score-dlt-ring)
+
+left to right direction
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+skinparam class {
+  BackgroundColor<<C module>> #FFF4D6
+  BackgroundColor<<C API>> #FFF4D6
+  BackgroundColor<<C struct>> #FFF4D6
+  BackgroundColor<<external>> #E8E8E8
+  BackgroundColor<<shared memory>> #F9E3F4
+}
+hide empty members
+
+class "dlt_c_api\n(see page 4)" as CApi <<C API>>
+class dlt_transport_ops <<C struct>>
+class dlt_stats <<C struct>>
+class dlt_ring_info <<C struct>>
+
+package "io-sock module: src/qnx, plain C" as Module {
+  class "iosock_module.c" as ModuleMain <<C module>> {
+    -g_stop : int
+    -g_worker_done : int
+    -dlt_worker(arg)
+    -dlt_module_event(mod, what, arg) : int
+    DECLARE_MODULE(SI_SUB_PSEUDO)
+    iosock_module_version
+  }
+
+  class "qnx_native_udp_transport.c" as UdpTransport <<C module>> {
+    -g_socket : struct socket*
+    -g_destination : sockaddr_in
+    -g_last_error : int
+    +dlt_udp_open(dst_ip, dst_port, src_port) : int
+    +dlt_udp_send(ctx, data, size) : int
+    +dlt_udp_last_error() : int
+    +dlt_udp_close()
+  }
+
+  class "qnx_module_stats.c" as ModuleStats <<C module>> {
+    sysctl qnx.module.score_dlt.*
+    +dlt_stats_publish(state, stats, last_error)
+    +dlt_stats_publish_ring(info)
+  }
+
+  class "qnx_shm_map.c" as ShmMap <<C module>> {
+    +dlt_shm_map_create(name, size, base_out) : int
+  }
+}
+
+class "io-sock stack\n(FreeBSD 13.4)" as IoSock <<external>> {
+  socreate, sobind, sosend, soclose
+  m_getcl, m_copyback
+  kthread_add, kthread_exit, pause
+  SYSCTL_INT / SYSCTL_NODE
+}
+
+class "libc\n(inside the io-sock process)" as Libc <<external>> {
+  shm_open, ftruncate, fchmod, mmap
+}
+
+class "Shared-memory ring\n(see page 3)" as SharedRing <<shared memory>>
+
+ModuleMain ..> CApi : session / ring start, step
+ModuleMain ..> UdpTransport : open, close
+ModuleMain ..> ModuleStats : publish
+ModuleMain ..> ShmMap : ring input
+ModuleMain ..> dlt_transport_ops : send = dlt_udp_send
+ModuleMain ..> IoSock : kthread_add, pause
+UdpTransport ..> IoSock : socreate, sosend, m_getcl
+ModuleStats ..> IoSock : sysctl
+ModuleStats ..> dlt_stats
+ModuleStats ..> dlt_ring_info
+ShmMap ..> Libc
+Libc ..> SharedRing : creates, maps
+@enduml
+
+' =========================================================================================================
+@startuml qnx_iosock_dlt_6_tools
+title 6 Tools: userspace forwarder and host harnesses (the same core, a different transport)
+
+left to right direction
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam class {
+  BackgroundColor<<Transport>> #E3F0FF
+  BackgroundColor<<concept>> #E3F0FF
+  BackgroundColor<<program>> #E6F5E6
+  BackgroundColor<<external>> #E8E8E8
+  BackgroundColor<<C module>> #FFF4D6
+  BackgroundColor<<shared memory>> #F9E3F4
+}
+hide empty members
+
+interface Transport <<concept>> {
+  +Send(data : const u8*, size : usize) : bool
+}
+
+class "Pipeline<Source, Transport>\n(see page 2)" as Pipeline
+class "ShmRingRecordSource\n(see page 2)" as ShmRingRecordSource
+class "DltWireFormatter\n(see page 2)" as DltWireFormatter
+
+class PosixUdpTransport <<Transport>> {
+  -fd_ : int
+  -dst_ : sockaddr_in
+  -calls_ : u64
+  -errors_ : u64
+  +Open(ip, port) : bool
+  +Send(data, size) : bool  (sendmsg)
+  +calls() : u64
+  +errors() : u64
+}
+
+class LinuxUdpTransport <<Transport>> {
+  -fd_ : int
+  -dst_ : sockaddr_in
+  +Open(ip, port) : bool
+  +Send(data, size) : bool  (sendto)
+}
+
+class "qnx_native_udp_transport.c\n(the module's transport)" as UdpTransport <<C module>> {
+  +dlt_udp_send(ctx, data, size) : int  (sosend)
+}
+
+class "ring_forwarder.cpp" as RingForwarder <<program>> {
+  userspace twin of the module
+  creates and owns its ring
+  SIGUSR1: counters, SIGTERM: stop
+  args: ring, dst, port, slots, payload, batch, poll, duration
+}
+
+class "host_ring_bridge.cpp" as HostBridge <<program>> {
+  module stand-in on the host
+  forwards N records, then exits
+}
+
+class "ring_producer.c" as RingProducer <<program>> {
+  test producer (host and QNX)
+}
+
+class "Shared-memory ring\n(see page 3)" as SharedRing <<shared memory>>
+
+class "io-sock" as IoSock <<external>>
+
+PosixUdpTransport ..|> Transport
+LinuxUdpTransport ..|> Transport
+Pipeline o-- Transport
+
+RingForwarder ..> Pipeline : Pipeline<ShmRingRecordSource, PosixUdpTransport>
+RingForwarder *-- PosixUdpTransport
+RingForwarder *-- ShmRingRecordSource
+RingForwarder *-- DltWireFormatter
+RingForwarder ..> SharedRing : creates, drains
+
+HostBridge ..> Pipeline : Pipeline<ShmRingRecordSource, LinuxUdpTransport>
+HostBridge *-- LinuxUdpTransport
+HostBridge *-- ShmRingRecordSource
+HostBridge ..> SharedRing : creates, drains
+
+RingProducer ..> SharedRing : writes
+
+PosixUdpTransport ..> IoSock : sendmsg: socket IPC into io-sock
+UdpTransport ..> IoSock : sosend: in-stack, no IPC
+
+note bottom of RingForwarder
+  Module against forwarder at equal batching isolates the cost
+  of the socket IPC hop (experiments G, I, J, K of tools/run_experiments.sh).
+end note
+@enduml

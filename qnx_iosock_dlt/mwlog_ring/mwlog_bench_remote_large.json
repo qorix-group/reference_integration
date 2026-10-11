@@ -1,0 +1,9 @@
+{
+    "appId": "BNCH",
+    "appDesc": "mw::log benchmark, DataRouter, 8 MiB buffer",
+    "logMode": "kRemote",
+    "logLevel": "kInfo",
+    "ringBufferSize": 8388608,
+    "numberOfSlots": 32,
+    "slotSizeBytes": 512
+}
