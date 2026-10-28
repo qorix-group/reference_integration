@@ -29,11 +29,11 @@ use std::path::{Path, PathBuf};
 use std::thread::sleep;
 use std::time::Duration;
 
+use com_api_gen::VehicleInterface;
 use score_com::{
     Builder, FindServiceSpecifier, InstanceSpecifier, LolaRuntimeBuilderImpl, LolaRuntimeImpl, Runtime, RuntimeBuilder,
     SampleContainer, ServiceDiscovery, Subscriber, Subscription,
 };
-use com_api_gen::VehicleInterface;
 
 /// Default instance specifier, matching com-api-example's deployment manifest.
 /// Overridable via `-i` so tests can target a dedicated (e.g. ASIL-B) instance
